@@ -1,0 +1,129 @@
+================================================================================
+METADATA
+Project: A temporal Bayesian ETAS analysis of the 2019 Ridgecrest earthquake 
+sequence: comparing the Omori-Utsu and alternative aftershock decay functions
+
+This file describes the raw dataset in this directory: what it contains and how
+to interpret it, the variables recorded (with units), when it was acquired, and 
+where it came from.
+
+--------------------------------------------------------------------------------
+SUMMARY
+--------------------------------------------------------------------------------
+
+This dataset is an EARTHQUAKE CATALOGUE: a table with one row per detected
+seismic event, recording when and where each event occurred, how large it was,
+and how well its location and size were measured.
+
+--------------------------------------------------------------------------------
+SOURCE
+--------------------------------------------------------------------------------
+Provider    : Southern California Earthquake Data Center (SCEDC), operated by 
+	      the California Institute of Technology (Caltech) Seismological
+	      Laboratory. The Southern California Seismic Network (SCSN) is
+	      operated jointly by Caltech and the United States Geological
+	      Survey (USGS).
+Catalogue   : Southern California Seismic Network (SCSN) catalogue,
+              obtained via the SCEDC catalog search.
+Obtained    : https://service.scedc.caltech.edu/eq-catalogs/date_mag_loc.php
+DOI         : doi:10.7909/C3WD3xH1
+Citations   :
+  Data      : SCEDC (2013): Southern California Earthquake Data Center. 
+	      Caltech. Dataset. doi:10.7909/C3WD3xH1
+  Network   : California Institute of Technology (Caltech) (1926): Southern
+              California Seismic Network. International Federation of Digital
+              Seismograph Networks. Other/Seismic Network. doi:10.7914/SN/CI
+Terms of Use:
+             "The SCEDC and SCSN are funded through U.S. Geological Survey 
+	      Grant G20AP00037, and the Southern California Earthquake Center,
+	      which is funded by NSF Cooperative Agreement EAR-0529922 and USGS
+              Cooperative Agreement 07HQAG0008."
+
+--------------------------------------------------------------------------------
+FILE FORMAT
+--------------------------------------------------------------------------------
+
+Plain text, whitespace-delimited. The file begins with several non-data lines 
+(a title line, an html "<PRE>" tag, and a DOI line) and ends with a "</PRE>" tag.
+Data rows are the lines beginning with a date (YYYY/MM/DD); a commented header 
+line precedes them. To read, keep only the date-initial lines and apply the 
+column names below.
+
+--------------------------------------------------------------------------------
+DATA SET
+--------------------------------------------------------------------------------
+File          : 2026-07-10_scedc-scsn_socal_2010-2025_raw.txt
+Records	      : 358,988 events
+Description   : SCSN-located seismic events (geographic type = Local) in the
+                region latitude 30.0-39.0 N, longitude 124.0-111.0 W
+	        (i.e. -124.0 to -111.0), 
+		from 2010-01-01 00:00:00 to 2025-12-31 23:59:59 (UTC). 
+		Magnitude range -1.0 to 9.0; depth range -5.0 to 30.0 km. 
+		Event type: Earthquakes only (see ET below). 
+		This is the raw regional catalogue; it is later subset spatially 
+		and temporally to the Ridgecrest sequence during analysis.
+Search parameters 
+(SCEDC catalog search):
+                Output Format = SCEDC;
+		Start Date = 2010/01/01 00:00:00; End Date = 2025/12/31 23:59:59; 
+		Minimum magnitude = -1.0; Maximum magnitude = 9.0;
+                Minimum depth (km) = -5.0; Maximum depth = 30.0;
+		Southern latitude = 30.0; Northern latitude = 39.0;
+                West longitude = -124.0; East longitude = -111.0;
+		Event type = Earthquake; Geographic type = Local.
+Date acquired : 2026-07-10
+
+--------------------------------------------------------------------------------
+VARIABLES
+--------------------------------------------------------------------------------
+Column header row in the raw files:
+  #YYY/MM/DD  HH:mm:SS.ss  ET  GT  MAG  M  LAT  LON  DEPTH  Q  EVID  NPH  NGRM
+
+(Definitions per the SCEDC catalog format specification, revised 2019-12-12, 
+available at https://scedc.caltech.edu/eq-catalogs/catalog-search-help.html and 
+https://scedc.caltech.edu/eq-catalogs/docs/scec_dc.html)
+
+YYY/MM/DD  : date of the event.                             (calendar date)
+HH:mm:SS.ss: time of the event, to hundredths of a second.  (time of day)
+             Time is UTC (7 hours ahead of Pacific Daylight 
+	     Time, 8 hours ahead of Pacific Standard Time).
+ET         : event type.                                    (code, unitless)
+             eq = earthquake, qb = quarry blast, 
+	     sn = sonic boom, nt = nuclear blast, 
+	     uk = unknown. 
+	     Initial query filters dataset to only include 
+	     eq events.
+GT         : geographical type.                             (code, unitless)
+             l = local (within SCSN region), 
+	     r = regional (neighbouring network), 
+	     t = teleseismic event (>1000 km away).
+	     Initial query filters dataset to only include
+	     l events. 
+MAG        : magnitude value of the event.                  (magnitude units)
+M          : type of magnitude that produced MAG.           (code, unitless)
+             e = energy, w = moment, b = body-wave, 
+	     s = surface-wave, l = local (Wood-Anderson), 
+	     lr = revised local, c = coda amplitude, 
+	     h = helicorder (short-period Benioff),
+             d = coda duration, n = no magnitude.
+LAT        : latitude of the epicentre.                     (decimal degrees,
+                                                                    + = north)
+LON        : longitude of the epicentre.                    (decimal degrees,
+                                                                    - = west)
+DEPTH      : hypocentral depth (between Earth's surface     (kilometres)
+             and the exact point underground where the 
+	     event originated), positive downward, 
+	     measured relative to sea level.                
+Q          : reliability of the estimated event location.   (grade, unitless)
+             Formal horizontal/depth uncertainty of the 
+	     computed hypocentre.
+	     A = +-1 km horizontal, +-2 km depth;
+             B = +-2 km horizontal, +-5 km depth;
+             C = +-5 km horizontal, no depth restriction;
+             D = worse than +-5 km horizontal;
+             Z = no quality listed in database.
+EVID       : SCEDC unique event identifier.		    (unitless)
+NPH        : number of picked phases used in locating the   (count)
+	     event.         
+NGRM       : number of seismogram traces associated with    (count)
+	     the event.
