@@ -1,0 +1,349 @@
+---
+title: "Exploratory Data Analysis for the 2019 Ridgecrest Sequence"
+author: "Sachit Ramakrishnan"
+bibliography: 01_eda_ridgecrest.bib
+format: html
+editor: visual
+---
+
+# Introduction
+
+## What is an earthquake catalogue?
+
+An **earthquake catalogue** is a table with one row per detected earthquake. For each event, a **seismic network** estimates *when* it happened (time of origin), *where* it happened (the longitude and latitude of the epicentre, and the depth below the surface), and *how large* it was (its magnitude). These are all estimates derived from the ground motion recorded at many stations, so they carry a level of uncertainty and occasional processing quirks. The purpose of this notebook is to understand the features and limitations of the data *before* modelling.
+
+## What is the ETAS model?
+
+Earthquakes are not independent: a large earthquake triggers a sequence of (usually smaller) events, whose rate decays with time. The **Epidemic-Type Aftershock Sequence (ETAS)** [@ogata1988] model captures this by assuming the rate of earthquakes at any moment is a **background** rate (assumed constant here) plus a **triggering** contribution from every past event. This project fits a **temporal** ETAS model (time only, ignoring space) to the **2019 Ridgecrest sequence**, and compares different parametric forms for the triggering component. For that, we first need clean data, a completeness threshold, and a defined sequence. These will be provided by the exploratory analysis.
+
+## What is the purpose of this notebook?
+
+The key goal with Exploratory Data Analysis (EDA) is to summarise key features of the data before building models. In our case, this means to:
+
+1.  **understand the data and find artefacts** - features caused by how the data were recorded/processed rather than by real earthquakes;
+2.  **extract the model's inputs** - the **magnitude of completeness $M_c$** (the smallest magnitude above which almost all events are recorded) and the Gutenberg-Richter **$b$-value** (which determines the magnitude of events);
+3.  **define the sequence** - choose the spatiotemporal window that isolates the Ridgecrest sequence;
+4.  **assess limitations and validity of assumptions** presented by the temporal ETAS model; motivate comparison of triggering kernels.
+
+The workflow largely follows the exploratory analysis developed for the `ETAS.inlabru` package [@naylor2023], available at <https://github.com/edinburgh-seismicity-hub/exploratory-seismicity-analysis/tree/main>. Here, that analysis is applied to a new data set and extended for our temporal-kernel focus.
+
+## The data
+
+This notebook analyses `2026-07-17_scedc-scsn_socal_2016-2025_raw.txt`: the **Southern California Seismic Network (SCSN) [@scsn1926] earthquake catalogue** (2016-2025), obtained from the **Southern California Earthquake Data Center (SCEDC) [@scedc2013]**, and restricted to *locally-recorded* seismic events (`GT = local`). **2016** was chosen as the start year to ensure a consistent processing regime [@scedc_changehistory], and **2025** as the end year as the last complete calendar year of processed data [@scedc_cataloguestatus]. Within the local region, we impose no restrictions on magnitude, depth, or event type. Additionally, the latitude/longitude search bounds were left unrestricted, with the geographic restriction imposed by the local geographic-type filter. This raw catalogue is later filtered to earthquakes and subset to the Ridgecrest sequence during analysis. We restrict to local events because the direct aftershocks were confined to a zone within the SCSN region [@shelly2020].
+
+**The data's source and full documentation are detailed in `data/raw/metadata.txt`.**
+
+# Setup
+
+```{r setup}
+# Load Packages
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(here)
+library(lubridate)
+library(maps)
+library(tidyr)
+
+
+# Project functions (see /src)
+
+source(here("src", "read_catalogue.R"))
+source(here("src", "map_helper.R"))
+theme_set(theme_bw())
+```
+
+**`read_catalogue()`** reads the raw SCEDC file, discards header and footer lines, assigns appropriate names for the columns, and creates a new date-time field (among a few other convenient columns).
+
+```{r load}
+# Load and parse data
+cat_path <- here("data","raw", "2026-07-17_scedc-scsn_socal_2016-2025_raw.txt")
+cat_raw <- read_catalogue(cat_path)
+```
+
+```{r map}
+# Initial map: whole world, to reveal any location oddities
+us_states <- map_data("state")
+world     <- map_data("world")
+
+ggplot() +
+  geom_polygon(data = world, aes(long, lat, group = group),
+               fill = "grey97", colour = NA) +
+  geom_polygon(data = us_states, aes(long, lat, group = group),
+               fill = NA, colour = "grey75", linewidth = 0.25) +
+  geom_polygon(data = world, aes(long, lat, group = group),
+               fill = NA, colour = "grey30", linewidth = 0.5) +
+  geom_point(data = cat_raw, aes(lon, lat),
+             colour = "firebrick", size = 0.4, alpha = 0.5) +
+  coord_quickmap() +
+  labs(title = "'Local' events, world view",
+       subtitle = "Note the cluster at 0\u00B0N, 0\u00B0E ('Null Island')",
+       x = "Longitude", y = "Latitude")
+```
+
+Plotting the raw catalogue on a world map immediately reveals a problem: a cluster of events that should be confined to the SCSN region instead are at $(0^{\circ}N ,0^{\circ}E)$ - a point in the Atlantic Oceean known as *Null Island*.
+
+```{r null-island}
+# Extract events with 'Null Island" location
+null_island <- cat_raw %>% filter(lat == 0, lon == 0)
+null_island
+```
+
+Zero picked phases (`nph`) for all observations indicates that the network detected an event but had too few phases to locate it, so the catalogue stored a placeholder coordinate of $(0,0)$. They are therefore data artefacts rather than genuine seismicity and are removed, although the precise cause of each cannot be determined from the catalogue alone.
+
+```{r remove-null-island}
+# Remove 'Null Island' events
+cat_clean <- cat_raw %>% filter(!(lat == 0 & lon == 0))
+```
+
+
+```{r summary}
+# Cleaned-catalogue summary 
+cat("Events:", nrow(cat_clean),
+    "| Window:",format(min(cat_clean$datetime)), "to",
+    format(max(cat_clean$datetime)), "\n" )
+```
+
+```{r map-local}
+# Map of the cleaned catalogue, cropped to its spatial extent
+spatial_window <- cat_clean %>%
+  summarise(lat_min = min(lat), lat_max = max(lat),
+            lon_min = min(lon), lon_max = max(lon))
+
+ggplot() +
+  geom_polygon(data = world, aes(long, lat, group = group),
+               fill = "grey97", colour = NA) +
+  geom_polygon(data = us_states, aes(long, lat, group = group),
+               fill = NA, colour = "grey75", linewidth = 0.25) +
+  geom_polygon(data = world, aes(long, lat, group = group),
+               fill = NA, colour = "grey30", linewidth = 0.5) +
+  geom_point(data = cat_clean, aes(lon, lat),
+             colour = "firebrick", size = 0.3, alpha = 0.3) +
+  coord_quickmap(
+            xlim = c(spatial_window$lon_min - 0.5, spatial_window$lon_max + 0.5),
+            ylim = c(spatial_window$lat_min - 0.5, spatial_window$lat_max + 0.5)) +
+  labs(title = "Local events", x = "Longitude", y = "Latitude")
+```
+
+With the placeholder records removed, the catalogue behaves as expected: the great majority of events lie in southern California, with a minority extending south into Baja California (Mexico) and the Gulf of California, and a scattering of events offshore and towards the Nevada border. 
+
+# Event type
+
+The raw download contains more than just earthquakes detected by the SCSN. 
+The *event type* (`et`) column records *earthquakes* (`eq`), in addition to other sources of seismic activity. This field is determined by analysts, based on factors such as event time, location and waveform characterisation [@allmann2008].
+We retain the whole catalogue for inspection, and filter to earthquakes only once we have confirmed that the event types are separable.
+
+## What is in the catalogue?
+
+```{r type-counts}
+# Count summaries for event type and geography type
+nrow(cat_clean)
+cat_clean %>% count(et, sort=TRUE)
+cat_clean %>% count(gt, sort=TRUE)
+```
+The catalogue is overwhelmingly comprised of earthquakes: $239,140$ events ($97.1 \%$). The largest non-earthquake category is **quarry blasts** ($7,173; 2.91\%$), while other man-made events are negligible ($25$ *explosions of unknown cause*, $3$ *sonic booms*).
+As expected, all events are **local** to the SCSN.
+
+## Sonic booms and explosions of unknown cause
+
+```{r sn-ex}
+# Summary of sonic boom and unknown explosion events
+cat_clean %>%
+  filter(et %in% c("ex", "sn")) %>%
+  group_by(et) %>%
+  summarise(n= n(),
+            mag_range = paste(min(mag), "to", max(mag)),
+            depth_med = median(depth),
+            first     = min(datetime),
+            last      = max(datetime),
+            .groups   = "drop")
+
+# Extracting the most significant events
+cat_clean %>%
+  filter(et %in% c("ex", "sn")) %>%
+  filter(mag>=1.5)
+```           
+
+We remove all `ex` ($ \sim 0.013 \%$) and `sn` ($ \sim 0.001 \%$) events, since neither is tectonic seismicity. Due to their negligible numbers, the decision is insensitive to label reliability: even if every one were a misclassified earthquake, removing them would not materially affect model fit. The largest event in this subset has magnitude $1.71$, so these are **small** events, and their removal is insensitive to the completeness threshold we determine later. If $M_c$ exceeds $\sim 1.71$, all events are excluded by the completeness cut, and even under a conservative $M_c$ of $1.5$, only a single event would be retained. We therefore remove them.
+
+## Earthquakes vs quarry blasts
+
+The ETAS framework we use rests on a generative assumption: every event in the catalogue is either **background** seismicity (driven by underlying tectonic processes) or **triggered** by a preceding earthquake - there is no third category. Quarry blasts fit neither: they are anthropogenic, externally scheduled events with no tectonic cause. Retaining them would therefore bias model parameters, as the model would be forced to attribute each blast to background or triggering. 
+Before removing them, however, we verify that `qb` and `eq` events form genuinely separable populations: we compare their characteristics in time, size, depth and space. This is important because we are acting on the catalogue's analyst-assigned labels: only if blasts form a distinct, identifiable group can we trust that removing `qb`-labelled events strips out genuine blasts rather than misclassified earthquakes. Should the two be indistinguishable, the labels would be unreliable, and we would retain the events rather than risk excluding earthquakes non-randomly.
+Individual mislabelling (earthquakes tagged as blasts or vice versa) cannot be excluded, and modern machine-learning approaches would likely classify some events differently [@zhu2024]. We nonetheless adopt the catalogue labels and note residual mislabelling as a limitation.
+
+### Time
+
+```{r et-ts}
+# Monthly count of each event type over time
+et_cols <- c(eq = "steelblue", qb = "firebrick")
+et_labs <- c(eq = "Earthquakes", qb = "Quarry blasts")
+
+cat_clean %>%
+  filter(et %in% c("eq", "qb")) %>%
+  mutate(month = floor_date(datetime, "month")) %>%
+  count(et, month) %>%
+  ggplot(aes(month, n, colour = et)) +
+  geom_line(linewidth = 0.5)+
+  scale_colour_manual(values = et_cols,
+                    labels = et_labs)+
+  facet_wrap(~ et, ncol = 1, scales = "free_y",
+             labeller = as_labeller(et_labs)) +   
+  labs(title = "Monthly event counts: earthquakes vs quarry blasts (2016-2025)",
+       x = "Month", y = "Events per month", colour = "Type") 
+```
+
+The two series differ in both **scale** and **character**. The panels have independent y-axes: on a shared axis the blasts would be invisible. Quarry blasts run at roughly 10-100 per month, while earthquakes range from about 1,000-2,000 in quiet months to tens of thousands (~30,000) at the height of the Ridgecrest sequence.
+Their temporal character differs just as sharply. Quarry blasts are generally **steady** across the window - a consistent, human-scheduled background process. The time series displays a slight downwards trend, in addition to a clear seasonality, which will be explored in later plots. Earthquakes, on the other hand, are **episodic**: a flat background until July 2019, then a sudden spike as the mainshock and its aftershocks arrive, decaying back towards background over the following two to three years. This highlights that blasts, if retained, would likely upwardly bias the background parameter.
+```{r qb-seasonality}
+# Plotting monthly quarry blasts for each year, with 2019 highlighted in 
+# comparison to an average year (not including 2019)
+qb_month <- cat_clean %>%
+  filter(et == "qb") %>%
+  count(year, month)
+
+avg_year <- qb_month %>%
+  filter(year != 2019) %>%
+  group_by(month) %>%
+  summarise(n = mean(n), .groups = "drop")
+
+year_ends <- qb_month %>%
+  group_by(year) %>% slice_max(as.integer(month), n = 1) %>% ungroup()
+
+ggplot(qb_month, aes(month, n, group = year)) +
+  geom_line(colour = "grey80", alpha = 0.8) +
+  geom_line(data = avg_year, aes(group = 1), colour = "black", linewidth = 1.2) +
+  geom_line(data = subset(qb_month, year == 2019), colour = "red", linewidth = 1.2) +
+  geom_text_repel(data = year_ends, aes(label = year),
+                  size = 3, hjust = 0, nudge_x = 0.3, direction = "y",
+                  segment.colour = NA) +
+  scale_x_discrete(expand = expansion(add = c(0.5, 1.5))) +
+  labs(title = "Quarry blasts by month (grey = years, black = average excl. 2019, red = 2019)",
+       x = "Month", y = "Number of blasts")
+```
+Quarry blasting shows a clear seasonal cycle - higher through summer, lower in winter - most likely driven by summer peaks in construction demand. Against the baseline, **summer 2019** stands out: blasts fell to roughly winter levels when they should have peaked, coinciding with the Ridgecrest sequence in July 2019. Two hard-to-separate mechanisms likely explain this: quarry operators near the sequence may have **paused blasting** in response to earthquakes, or the flood of aftershocks may have **overwhelmed catalogue processing** so blasts were under-detected during that window. 
+
+```{r et-hour}
+# Heatmap of event distribution across a week
+cat_clean %>%
+  filter(et %in% c("eq", "qb")) %>%
+  mutate(
+    local = lubridate::with_tz(datetime, "America/Los_Angeles"),
+    hour  = lubridate::hour(local),
+    wday  = lubridate::wday(local, label = TRUE, abbr = FALSE, week_start = 1)
+  ) %>%
+  count(et, wday, hour) %>%
+  tidyr::complete(et, wday, hour = 0:23, fill = list(n = 0)) %>%
+  group_by(et) %>% mutate(frac = n / sum(n)) %>% ungroup() %>%
+  ggplot(aes(hour, wday, fill = frac)) +
+  geom_tile() +
+  facet_wrap(~ et, labeller = as_labeller(c(eq = "Earthquakes",
+                                            qb = "Quarry blasts"))) +
+  scale_y_discrete(limits = rev) +                        
+  scale_fill_gradientn(colours = c("black", "darkred", "red", "orange")) +
+  labs(title = "When events happen: day-of-week x hour-of-day (local time)",
+       x = "Hour (local)", y = "Day of week", fill = "Fraction")
+```
+
+The two populations occupy the working week very differently. Earthquakes fill the entire grid roughly evenly, as expected for a natural process without a reason to prefer any hour or day. On the other hand, quarry blasts are sharply concentrated in **weekday daytime working hours** (09:00-17:00 local Monday-Friday), going dark overnight and across the weekend. This is a strong signature of human-scheduling, and is likely a strong blast discriminant. 
+
+### Magnitude
+
+```{r et-mag}
+# Kernel density estimates of magnitude distributions
+cat_clean %>%
+  filter(et %in% c("eq", "qb")) %>%
+  ggplot(aes(mag, fill = et,colour=et)) +
+  geom_density(alpha = 0.3, linewidth = 0.8)+
+  scale_colour_manual(name = "Type", values = et_cols,
+                    labels = et_labs)+
+  scale_fill_manual(name = "Type", values = et_cols,
+                    labels = et_labs) +
+  labs(title = "Magnitude distribution: earthquakes vs quarry blasts",
+       x = "Magnitude", y = "Density", fill = "Type")
+```
+
+The kernel density estimates of magnitude distributions are also distinct. Quarry blasts are *tightly packed* at small magnitudes (almost entirely between $0.5$ and $2.5$), reflecting the limited and repeatable energy of a controlled explosion, whereas earthquakes span a *much wider* range (from $-0.5$ to $4$ and beyond), with a long right tail characteristic of the Gutenberg-Richter law [@gutenberg1949, p. 17]. In both cases, the fall-off in density below the peak is the signature of catalogue incompleteness: below the magnitude of completeness $M_c$ (which we determine later) progressively more small events escape detection.
+
+### Depth
+
+```{r et-depth}
+# Kernel density estimates of depth distributions
+cat_clean %>%
+  filter(et %in% c("eq", "qb")) %>%
+  ggplot(aes(depth, fill = et)) +
+  geom_density(alpha = 0.5) +
+  scale_fill_manual(values = et_cols,
+                    labels = et_labs)+
+  labs(title = "Depth distribution: earthquakes vs quarry blasts",
+       x = "Depth (km)", y = "Density", fill = "Type")
+```
+Quarry blasts typically detonate at or just below the surface, so their depths pile up near zero, while earthquakes are distributed over a range of crustal depths.
+
+### Spatial
+
+```{r et-map}
+# Examining quarry blast and earthquake locations
+cat_clean %>%
+  filter(et %in% c("eq", "qb")) %>%
+    ggplot() +
+  geom_polygon(data = world, aes(long, lat, group = group),
+               fill = "grey97", colour = NA) +
+  geom_polygon(data = us_states, aes(long, lat, group = group),
+               fill = NA, colour = "grey75", linewidth = 0.25) +
+  geom_polygon(data = world, aes(long, lat, group = group),
+               fill = NA, colour = "grey30", linewidth = 0.6) +
+  geom_point(aes(lon, lat, colour = et), size = 0.3, alpha = 0.4) +
+  scale_colour_manual(values = et_cols,
+                    labels = et_labs) +
+  coord_quickmap( xlim = c(spatial_window$lon_min - 0.5, spatial_window$lon_max + 0.5),
+            ylim = c(spatial_window$lat_min - 0.5, spatial_window$lat_max + 0.5)) +  
+  labs(title = "Earthquakes vs quarry blasts (regional context)",
+       x = "Longitude", y = "Latitude", colour = "Type") +
+  guides(colour = guide_legend(override.aes = list(size = 2, alpha = 1)))
+```
+
+The two are also spatially distinct: earthquakes typically trace linear fault structure, while quarry blasts occur in a few tight, isolated clusters at fixed sites - presumably the quarrying sites themselves.
+
+### Decision
+
+The above categories separate quarry blasts from earthquakes. We therefore **remove** all `qb` events and **retain** the `eq` events for modelling. 
+
+```{r make-quakes}
+# Retain only earthquake events
+cat <- cat_clean %>% filter(et == "eq")
+cat("Earthquakes:", nrow(cat), "of", nrow(cat_raw), "total events\n")
+```
+
+# Exploratory Data Analysis
+
+## Histogram of event depths
+
+```{r depth-histogram}
+hist(
+  cat$depth,
+  breaks = seq(650, -5, -1),
+  xlim = c(-5, 40),
+  main = "Histogram of depths, 1km bins",
+  xlab = "Depth [km]"
+)
+```
+```{r}
+hist(
+  cat$depth,
+  breaks = seq(40, -5, -0.1),
+  xlim = c(-5, 40),
+  main = "Histogram of depths (100m bins)",
+  xlab = "Depth [km]"
+)
+```
+
+```{r}
+ggplot(cat, aes(x = datetime, y = depth)) +
+  geom_point(size = 0.1) +
+  ggtitle("Depth timeseries using natural time")
+```
+# References
+
+::: {#refs}
+:::

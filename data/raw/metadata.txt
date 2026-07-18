@@ -28,7 +28,7 @@ Catalogue   : Southern California Seismic Network (SCSN) catalogue,
 Obtained    : https://service.scedc.caltech.edu/eq-catalogs/date_mag_loc.php
 DOI         : doi:10.7909/C3WD3xH1
 Citations   :
-  Data      : SCEDC (2013): Southern California Earthquake Data Center. 
+  Data      : SCEDC (2013): Southern California Earthquake Center. 
 	      Caltech. Dataset. doi:10.7909/C3WD3xH1
   Network   : California Institute of Technology (Caltech) (1926): Southern
               California Seismic Network. International Federation of Digital
@@ -52,26 +52,25 @@ column names below.
 --------------------------------------------------------------------------------
 DATA SET
 --------------------------------------------------------------------------------
-File          : 2026-07-10_scedc-scsn_socal_2010-2025_raw.txt
-Records	      : 358,988 events
-Description   : SCSN-located seismic events (geographic type = Local) in the
-                region latitude 30.0-39.0 N, longitude 124.0-111.0 W
-	        (i.e. -124.0 to -111.0), 
-		from 2010-01-01 00:00:00 to 2025-12-31 23:59:59 (UTC). 
-		Magnitude range -1.0 to 9.0; depth range -5.0 to 30.0 km. 
-		Event type: Earthquakes only (see ET below). 
+File          : 2026-07-17_scedc-scsn_socal_2016-2025_raw.txt
+Records	      : 246,349 events
+Description   : SCSN-located seismic events (geographic type = local) in the
+                region latitude -90.0 to 90.0 N, longitude -180 to 180.0 E, 
+		from 2016-01-01 00:00:00 to 2025-12-31 23:59:59 (UTC). 
+		Magnitude range -10.0 to 10.0; depth range -5.0 to 100.0 km. 
+		Event type: All (see ET below). 
 		This is the raw regional catalogue; it is later subset spatially 
 		and temporally to the Ridgecrest sequence during analysis.
 Search parameters 
 (SCEDC catalog search):
                 Output Format = SCEDC;
-		Start Date = 2010/01/01 00:00:00; End Date = 2025/12/31 23:59:59; 
-		Minimum magnitude = -1.0; Maximum magnitude = 9.0;
-                Minimum depth (km) = -5.0; Maximum depth = 30.0;
-		Southern latitude = 30.0; Northern latitude = 39.0;
-                West longitude = -124.0; East longitude = -111.0;
-		Event type = Earthquake; Geographic type = Local.
-Date acquired : 2026-07-10
+		Start Date = 2016/01/01 00:00:00; End Date = 2025/12/31 23:59:59; 
+		Minimum magnitude = -10.0; Maximum magnitude = 10.0;
+                Minimum depth (km) = -5.0; Maximum depth = 100.0;
+		Southern latitude = -90.0; Northern latitude = 90.0;
+                West longitude = -180.0; East longitude = 180.0;
+		Event type = All; Geographic type = local.
+Date acquired : 2026-07-17
 
 --------------------------------------------------------------------------------
 VARIABLES
@@ -88,17 +87,17 @@ HH:mm:SS.ss: time of the event, to hundredths of a second.  (time of day)
              Time is UTC (7 hours ahead of Pacific Daylight 
 	     Time, 8 hours ahead of Pacific Standard Time).
 ET         : event type.                                    (code, unitless)
-             eq = earthquake, qb = quarry blast, 
-	     sn = sonic boom, nt = nuclear blast, 
-	     uk = unknown. 
-	     Initial query filters dataset to only include 
-	     eq events.
+             eq = earthquake, ex = explosion (unknown cause), 
+	     sh = explosion (part of seismic survey),
+	     qb = quarry blast, sn = sonic boom,
+	     st = subnet trigger (detected by network 
+             algorithm), th = thunder,
+	     nt = nuclear blast, uk = unknown.
 GT         : geographical type.                             (code, unitless)
              l = local (within SCSN region), 
 	     r = regional (neighbouring network), 
 	     t = teleseismic event (>1000 km away).
-	     Initial query filters dataset to only include
-	     l events. 
+	     Query filters out non-local events.
 MAG        : magnitude value of the event.                  (magnitude units)
 M          : type of magnitude that produced MAG.           (code, unitless)
              e = energy, w = moment, b = body-wave, 
@@ -113,7 +112,7 @@ LON        : longitude of the epicentre.                    (decimal degrees,
 DEPTH      : hypocentral depth (between Earth's surface     (kilometres)
              and the exact point underground where the 
 	     event originated), positive downward, 
-	     measured relative to sea level.                
+	     measured relative to WGS84 reference ellipsoid.                
 Q          : reliability of the estimated event location.   (grade, unitless)
              Formal horizontal/depth uncertainty of the 
 	     computed hypocentre.
