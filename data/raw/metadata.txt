@@ -47,18 +47,19 @@ Plain text, whitespace-delimited. The file begins with several non-data lines
 (a title line, an html "<PRE>" tag, and a DOI line) and ends with a "</PRE>" tag.
 Data rows are the lines beginning with a date (YYYY/MM/DD); a commented header 
 line precedes them. To read, keep only the date-initial lines and apply the 
-column names below.
+column names below (see `src/read_catalogue.R`).
 
 --------------------------------------------------------------------------------
 DATA SET
 --------------------------------------------------------------------------------
-File          : 2026-07-17_scedc-scsn_socal_2016-2025_raw.txt
-Records	      : 246,349 events
-Description   : SCSN-located seismic events (geographic type = local) in the
+File          : 2026-07-23_scedc-scsn_socal_2016-2025_raw.txt
+Records	      : 249,899 events
+Description   : All SCSN seismic events in the
                 region latitude -90.0 to 90.0 N, longitude -180 to 180.0 E, 
 		from 2016-01-01 00:00:00 to 2025-12-31 23:59:59 (UTC). 
 		Magnitude range -10.0 to 10.0; depth range -5.0 to 100.0 km. 
 		Event type: All (see ET below). 
+		Geographical type: All
 		This is the raw regional catalogue; it is later subset spatially 
 		and temporally to the Ridgecrest sequence during analysis.
 Search parameters 
@@ -69,8 +70,8 @@ Search parameters
                 Minimum depth (km) = -5.0; Maximum depth = 100.0;
 		Southern latitude = -90.0; Northern latitude = 90.0;
                 West longitude = -180.0; East longitude = 180.0;
-		Event type = All; Geographic type = local.
-Date acquired : 2026-07-17
+		Event type = All; Geographic type = All.
+Date acquired : 2026-07-23
 
 --------------------------------------------------------------------------------
 VARIABLES
@@ -97,7 +98,6 @@ GT         : geographical type.                             (code, unitless)
              l = local (within SCSN region), 
 	     r = regional (neighbouring network), 
 	     t = teleseismic event (>1000 km away).
-	     Query filters out non-local events.
 MAG        : magnitude value of the event.                  (magnitude units)
 M          : type of magnitude that produced MAG.           (code, unitless)
              e = energy, w = moment, b = body-wave, 

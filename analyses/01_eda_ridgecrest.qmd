@@ -29,59 +29,185 @@ The workflow largely follows the exploratory analysis developed for the `ETAS.in
 
 ## The data
 
-This notebook analyses `2026-07-17_scedc-scsn_socal_2016-2025_raw.txt`: the **Southern California Seismic Network (SCSN) [@scsn1926] earthquake catalogue** (2016-2025), obtained from the **Southern California Earthquake Data Center (SCEDC) [@scedc2013]**, and restricted to *locally-recorded* seismic events (`GT = local`). **2016** was chosen as the start year to ensure a consistent processing regime [@scedc_changehistory], and **2025** as the end year as the last complete calendar year of processed data [@scedc_cataloguestatus]. Within the local region, we impose no restrictions on magnitude, depth, or event type. Additionally, the latitude/longitude search bounds were left unrestricted, with the geographic restriction imposed by the local geographic-type filter. This raw catalogue is later filtered to earthquakes and subset to the Ridgecrest sequence during analysis. We restrict to local events because the direct aftershocks were confined to a zone within the SCSN region [@shelly2020].
+This notebook analyses `2026-07-17_scedc-scsn_socal_2016-2025_raw.txt`: the **Southern California Seismic Network (SCSN) [@scsn1926] earthquake catalogue** (2016-2025), obtained from the **Southern California Earthquake Data Center (SCEDC) [@scedc2013]**. **2016** was chosen as the start year to ensure a consistent processing regime [@scedc_changehistory], and **2025** as the end year as the last complete calendar year of processed data [@scedc_cataloguestatus]. We impose no restrictions on magnitude, depth, or event type. Additionally, the latitude/longitude search bounds were left unrestricted, with the geographic restriction imposed by the local geographic-type filter. This raw catalogue is later filtered to earthquakes and subset to the Ridgecrest sequence during analysis. 
 
 **The data's source and full documentation are detailed in `data/raw/metadata.txt`.**
 
 # Setup
 
 ```{r setup}
-# Load Packages
+################################################################################
+# Chunk options 
+################################################################################
+knitr::opts_chunk$set(
+  echo      = TRUE,      
+  message   = FALSE,     
+  warning   = FALSE,     
+  fig.align = "center",
+  fig.width = 7, fig.height = 4.5, dpi = 150
+)
+
+################################################################################
+# Packages 
+################################################################################
 library(dplyr)
+library(geosphere)
 library(ggplot2)
 library(ggrepel)
 library(here)
 library(lubridate)
 library(maps)
+library(sf)
+library(stats)
 library(tidyr)
-
-
-# Project functions (see /src)
-
+library(zoo) 
+################################################################################
+# Project functions (see /src) 
+################################################################################
 source(here("src", "read_catalogue.R"))
-source(here("src", "map_helper.R"))
+source(here("src", "eda_helpers.R"))
+source(here("src", "bvalue.R"))
+
+################################################################################
+# Global plot theme 
+################################################################################
 theme_set(theme_bw())
+################################################################################
+# Reusable objects
+################################################################################
+# Base-map polygons: computed once here, reused by every map
+world     <- map_data("world")
+us_states <- map_data("state")
+
+base_map <- list(
+    # Land fill: light-grey world polygons, no outline
+    geom_polygon(data = world, aes(long, lat, group = group),
+                 fill = "grey97", colour = NA),
+    # Internal US state borders: thin and light
+    geom_polygon(data = us_states, aes(long, lat, group = group),
+                 fill = NA, colour = "grey75", linewidth = 0.25),
+    # National borders: darker, on top of the state lines
+    geom_polygon(data = world, aes(long, lat, group = group),
+                 fill = NA, colour = "grey30", linewidth = 0.5)
+  )
+
+# Shared earthquake / quarry-blast colours and labels
+et_cols <- c(eq = "steelblue", qb = "firebrick")
+et_labs <- c(eq = "Earthquakes", qb = "Quarry blasts")
+
+# Magnitude bin width - used to discretise magnitudes when building
+# frequency-magnitude distribution
+dm <- 0.1
 ```
 
 **`read_catalogue()`** reads the raw SCEDC file, discards header and footer lines, assigns appropriate names for the columns, and creates a new date-time field (among a few other convenient columns).
 
 ```{r load}
 # Load and parse data
-cat_path <- here("data","raw", "2026-07-17_scedc-scsn_socal_2016-2025_raw.txt")
-cat_raw <- read_catalogue(cat_path)
+cat_path <- here("data","raw", "2026-07-23_scedc-scsn_socal_2016-2025_raw.txt")
+cat_raw_all<- read_catalogue(cat_path)
 ```
+
+```{r important-observations}
+# Ridgecrest mainshock (M7.1) and foreshock (M6.4), in UTC.
+mainshock <- cat_raw_all%>%filter(mag == 7.1, date == "2019/07/06")
+mainshock_time <- mainshock$datetime
+foreshock <- cat_raw_all%>%filter(mag==6.4, date == "2019/07/04")
+foreshock_time <- foreshock$datetime
+mainshock_lon  <- mainshock$lon
+mainshock_lat  <-   mainshock$lat
+foreshock_lon  <- foreshock$lon
+foreshock_lat  <-   foreshock$lat
+
+events <- data.frame(
+  lon   = c(mainshock_lon, foreshock_lon),
+  lat   = c(mainshock_lat, foreshock_lat),
+  time  = c(mainshock_time, foreshock_time),
+  type  = c("Mainshock", "Foreshock")
+)
+```
+## Geography type
+
+```{r map-all}
+cat_raw_all %>%
+  ggplot() +
+  base_map +
+  geom_point(aes(lon, lat, colour = gt), size = 1, alpha = 0.5) +
+  geom_point(data = events, aes(lon, lat, shape = type), size = 3, stroke = 1.2) +
+  scale_shape_manual(values = c(Mainshock = 8, Foreshock = 5), name = "Key") +
+  scale_colour_manual(
+    values = c(l = "grey55", r = "blue", t = "purple"),
+    labels = c(l = "Local", r = "Regional", t = "Teleseismic"),
+    name   = "Geographic type"
+  ) +
+  coord_quickmap() +
+  labs(title = "Events by geographic type", x = "Longitude", y = "Latitude")
+```
+
+We choose to retain events of local geographic type (`gt=l`). The reasoning behind this is physically motivated. The $M7.1$ Ridgecrest produced ~46 km of surface rupture [@barnhart], and aftershocks are expected to occur within 1-2 fault lengths of the rupture [@usgs_aftershocks]; consistently, Gardner and Knopoff [@gardner1974sequence] specify an aftershock distance window of ~70km for an M$7.0$ South California earthquake, aftershock. Because these empirical estimates are derived from observed sequences, they already encompass higher-generation aftershock, which are triggered locally and remain spatially confined. To test for contamination conservatively, we consider an ellipse aligned with the $\sim 322^{\circ}$ rupture strike [@barnhart], with semi=major axis three times and semi-minor axis two times the fault length - exceeding both estimates above. No regional or teleseismic events fall within this conservative zone, validating their removal from analysis. 
+
+```{r map-aftershock}
+# Ellipse parameters
+strike_deg <- 322          # fault strike, NW-SE (Ridgecrest M7.1 ~ 322°)
+a <- 46 * 3 * 1000         # semi-major axis along strike
+b <- 46 * 2 * 1000         # semi-minor axis across strike (e.g. 18 km)
+
+# Build oriented ellipse
+t       <- seq(0, 2*pi, length.out = 361)
+along   <- a * cos(t)                       # component along strike
+across  <- b * sin(t)                       # component across strike
+dist    <- sqrt(along^2 + across^2)         # distance from centre
+bearing <- (strike_deg + atan2(across, along) * 180/pi) %% 360   # bearing from N
+
+ellipse <- as.data.frame(
+  destPoint(p = c(mainshock_lon, mainshock_lat), b = bearing, d = dist)
+)  
+
+# Plot
+cat_raw_all %>%
+  filter(gt != "l")%>%
+  ggplot() +
+  base_map +
+  geom_point(aes(lon, lat,col=gt), alpha = 0.4) +
+  geom_path(data = ellipse, aes(lon, lat), colour = "red", linewidth = 0.6) +
+  geom_point(data = events, aes(lon, lat, shape = type), size = 3, stroke = 1.2) + 
+  scale_shape_manual(values = c(Mainshock = 8, Foreshock = 5), name = "Key") +
+  scale_colour_manual(
+    values = c(r = "blue", t = "purple"),
+    labels = c(r = "Regional", t = "Teleseismic"),
+    name   = "Non-local events"
+  ) +
+  coord_quickmap(xlim = mainshock_lon + c(-2,2),
+                 ylim = mainshock_lat + c(-2,2)) +
+  labs(title = "Ridgecrest sequence and fault-aligned aftershock zone",
+       subtitle = "Ellipse aligned NW-SE along the M7.1 rupture",
+       x = "Longitude", y = "Latitude")
+```
+
+
+
+```{r local}
+# Retain only local events
+cat_raw <- cat_raw_all%>%filter(gt == "l")
+```
+
+## Summary of local events
 
 ```{r map}
 # Initial map: whole world, to reveal any location oddities
-us_states <- map_data("state")
-world     <- map_data("world")
-
 ggplot() +
-  geom_polygon(data = world, aes(long, lat, group = group),
-               fill = "grey97", colour = NA) +
-  geom_polygon(data = us_states, aes(long, lat, group = group),
-               fill = NA, colour = "grey75", linewidth = 0.25) +
-  geom_polygon(data = world, aes(long, lat, group = group),
-               fill = NA, colour = "grey30", linewidth = 0.5) +
+  base_map +
   geom_point(data = cat_raw, aes(lon, lat),
              colour = "firebrick", size = 0.4, alpha = 0.5) +
+  geom_point(data = events, aes(lon, lat, shape = type), size = 3, stroke = 1.2) +
+  scale_shape_manual(values = c(Mainshock = 8, Foreshock = 5), name = "Key")+
   coord_quickmap() +
   labs(title = "'Local' events, world view",
        subtitle = "Note the cluster at 0\u00B0N, 0\u00B0E ('Null Island')",
        x = "Longitude", y = "Latitude")
 ```
 
-Plotting the raw catalogue on a world map immediately reveals a problem: a cluster of events that should be confined to the SCSN region instead are at $(0^{\circ}N ,0^{\circ}E)$ - a point in the Atlantic Oceean known as *Null Island*.
+Plotting the raw catalogue on a world map immediately reveals a problem: a cluster of events that should be confined to the SCSN region instead are at $(0^{\circ}N ,0^{\circ}E)$ - a point in the Atlantic Ocean known as *Null Island*.
 
 ```{r null-island}
 # Extract events with 'Null Island" location
@@ -106,19 +232,16 @@ cat("Events:", nrow(cat_clean),
 
 ```{r map-local}
 # Map of the cleaned catalogue, cropped to its spatial extent
-spatial_window <- cat_clean %>%
+spatial_window <- cat_clean%>%
   summarise(lat_min = min(lat), lat_max = max(lat),
             lon_min = min(lon), lon_max = max(lon))
 
 ggplot() +
-  geom_polygon(data = world, aes(long, lat, group = group),
-               fill = "grey97", colour = NA) +
-  geom_polygon(data = us_states, aes(long, lat, group = group),
-               fill = NA, colour = "grey75", linewidth = 0.25) +
-  geom_polygon(data = world, aes(long, lat, group = group),
-               fill = NA, colour = "grey30", linewidth = 0.5) +
+  base_map +
   geom_point(data = cat_clean, aes(lon, lat),
              colour = "firebrick", size = 0.3, alpha = 0.3) +
+  geom_point(data = events, aes(lon, lat, shape = type), size = 3, stroke = 1.2) +
+  scale_shape_manual(values = c(Mainshock = 8, Foreshock = 5), name = "Key")+
   coord_quickmap(
             xlim = c(spatial_window$lon_min - 0.5, spatial_window$lon_max + 0.5),
             ylim = c(spatial_window$lat_min - 0.5, spatial_window$lat_max + 0.5)) +
@@ -127,13 +250,13 @@ ggplot() +
 
 With the placeholder records removed, the catalogue behaves as expected: the great majority of events lie in southern California, with a minority extending south into Baja California (Mexico) and the Gulf of California, and a scattering of events offshore and towards the Nevada border. 
 
-# Event type
+## Event type
 
 The raw download contains more than just earthquakes detected by the SCSN. 
 The *event type* (`et`) column records *earthquakes* (`eq`), in addition to other sources of seismic activity. This field is determined by analysts, based on factors such as event time, location and waveform characterisation [@allmann2008].
 We retain the whole catalogue for inspection, and filter to earthquakes only once we have confirmed that the event types are separable.
 
-## What is in the catalogue?
+### What is in the catalogue?
 
 ```{r type-counts}
 # Count summaries for event type and geography type
@@ -144,7 +267,7 @@ cat_clean %>% count(gt, sort=TRUE)
 The catalogue is overwhelmingly comprised of earthquakes: $239,140$ events ($97.1 \%$). The largest non-earthquake category is **quarry blasts** ($7,173; 2.91\%$), while other man-made events are negligible ($25$ *explosions of unknown cause*, $3$ *sonic booms*).
 As expected, all events are **local** to the SCSN.
 
-## Sonic booms and explosions of unknown cause
+### Sonic booms and explosions of unknown cause
 
 ```{r sn-ex}
 # Summary of sonic boom and unknown explosion events
@@ -174,16 +297,17 @@ Individual mislabelling (earthquakes tagged as blasts or vice versa) cannot be e
 
 ### Time
 
+```{r et-df}
+# Create data frame with only `qb` and `eq` events
+eq_qb <- cat_clean %>% 
+  filter(et %in% c("eq", "qb"))
+```
+
 ```{r et-ts}
 # Monthly count of each event type over time
-et_cols <- c(eq = "steelblue", qb = "firebrick")
-et_labs <- c(eq = "Earthquakes", qb = "Quarry blasts")
-
-cat_clean %>%
-  filter(et %in% c("eq", "qb")) %>%
-  mutate(month = floor_date(datetime, "month")) %>%
-  count(et, month) %>%
-  ggplot(aes(month, n, colour = et)) +
+eq_qb%>%
+  count(et, month_start) %>%
+  ggplot(aes(month_start, n, colour = et)) +
   geom_line(linewidth = 0.5)+
   scale_colour_manual(values = et_cols,
                     labels = et_labs)+
@@ -225,20 +349,13 @@ Quarry blasting shows a clear seasonal cycle - higher through summer, lower in w
 
 ```{r et-hour}
 # Heatmap of event distribution across a week
-cat_clean %>%
-  filter(et %in% c("eq", "qb")) %>%
-  mutate(
-    local = lubridate::with_tz(datetime, "America/Los_Angeles"),
-    hour  = lubridate::hour(local),
-    wday  = lubridate::wday(local, label = TRUE, abbr = FALSE, week_start = 1)
-  ) %>%
+eq_qb%>%
   count(et, wday, hour) %>%
-  tidyr::complete(et, wday, hour = 0:23, fill = list(n = 0)) %>%
+  complete(et, wday, hour = 0:23, fill = list(n = 0)) %>%
   group_by(et) %>% mutate(frac = n / sum(n)) %>% ungroup() %>%
   ggplot(aes(hour, wday, fill = frac)) +
   geom_tile() +
-  facet_wrap(~ et, labeller = as_labeller(c(eq = "Earthquakes",
-                                            qb = "Quarry blasts"))) +
+  facet_wrap(~ et, labeller = as_labeller(et_labs)) +
   scale_y_discrete(limits = rev) +                        
   scale_fill_gradientn(colours = c("black", "darkred", "red", "orange")) +
   labs(title = "When events happen: day-of-week x hour-of-day (local time)",
@@ -251,8 +368,7 @@ The two populations occupy the working week very differently. Earthquakes fill t
 
 ```{r et-mag}
 # Kernel density estimates of magnitude distributions
-cat_clean %>%
-  filter(et %in% c("eq", "qb")) %>%
+eq_qb%>%
   ggplot(aes(mag, fill = et,colour=et)) +
   geom_density(alpha = 0.3, linewidth = 0.8)+
   scale_colour_manual(name = "Type", values = et_cols,
@@ -263,18 +379,19 @@ cat_clean %>%
        x = "Magnitude", y = "Density", fill = "Type")
 ```
 
-The kernel density estimates of magnitude distributions are also distinct. Quarry blasts are *tightly packed* at small magnitudes (almost entirely between $0.5$ and $2.5$), reflecting the limited and repeatable energy of a controlled explosion, whereas earthquakes span a *much wider* range (from $-0.5$ to $4$ and beyond), with a long right tail characteristic of the Gutenberg-Richter law [@gutenberg1949, p. 17]. In both cases, the fall-off in density below the peak is the signature of catalogue incompleteness: below the magnitude of completeness $M_c$ (which we determine later) progressively more small events escape detection.
+The kernel density estimates of magnitude distributions are also distinct. Quarry blasts are *tightly packed* at small magnitudes (almost entirely between $0.5$ and $2.5$), reflecting the limited and repeatable energy of a controlled explosion, whereas earthquakes span a *much wider* range (from $-0.5$ to $4$ and beyond), with a long right tail characteristic of the **Gutenberg-Richter** law [@gutenberg1949, p. 17]. In both cases, the fall-off in density below the peak is the signature of catalogue incompleteness: below the magnitude of completeness $M_c$ (which we determine later) progressively more small events escape detection.
 
 ### Depth
 
 ```{r et-depth}
 # Kernel density estimates of depth distributions
-cat_clean %>%
-  filter(et %in% c("eq", "qb")) %>%
-  ggplot(aes(depth, fill = et)) +
+eq_qb%>%
+  ggplot(aes(depth, fill = et,colour=et)) +
   geom_density(alpha = 0.5) +
-  scale_fill_manual(values = et_cols,
+  scale_colour_manual(name="Type",values = et_cols,
                     labels = et_labs)+
+    scale_fill_manual(name = "Type", values = et_cols,
+                    labels = et_labs) +
   labs(title = "Depth distribution: earthquakes vs quarry blasts",
        x = "Depth (km)", y = "Density", fill = "Type")
 ```
@@ -284,18 +401,13 @@ Quarry blasts typically detonate at or just below the surface, so their depths p
 
 ```{r et-map}
 # Examining quarry blast and earthquake locations
-cat_clean %>%
-  filter(et %in% c("eq", "qb")) %>%
-    ggplot() +
-  geom_polygon(data = world, aes(long, lat, group = group),
-               fill = "grey97", colour = NA) +
-  geom_polygon(data = us_states, aes(long, lat, group = group),
-               fill = NA, colour = "grey75", linewidth = 0.25) +
-  geom_polygon(data = world, aes(long, lat, group = group),
-               fill = NA, colour = "grey30", linewidth = 0.6) +
+eq_qb%>%
+    ggplot() + base_map + 
   geom_point(aes(lon, lat, colour = et), size = 0.3, alpha = 0.4) +
   scale_colour_manual(values = et_cols,
                     labels = et_labs) +
+  geom_point(data = events, aes(lon, lat, shape = type), size = 3, stroke = 1.2) +
+  scale_shape_manual(values = c(Mainshock = 8, Foreshock = 5), name = "Key")+
   coord_quickmap( xlim = c(spatial_window$lon_min - 0.5, spatial_window$lon_max + 0.5),
             ylim = c(spatial_window$lat_min - 0.5, spatial_window$lat_max + 0.5)) +  
   labs(title = "Earthquakes vs quarry blasts (regional context)",
@@ -315,34 +427,479 @@ cat <- cat_clean %>% filter(et == "eq")
 cat("Earthquakes:", nrow(cat), "of", nrow(cat_raw), "total events\n")
 ```
 
-# Exploratory Data Analysis
+# Catalogue quality assessment
 
-## Histogram of event depths
+We explore feature and artefacts of the retained events (earthquakes within the SCSN network).
 
-```{r depth-histogram}
-hist(
-  cat$depth,
-  breaks = seq(650, -5, -1),
-  xlim = c(-5, 40),
-  main = "Histogram of depths, 1km bins",
-  xlab = "Depth [km]"
-)
-```
-```{r}
-hist(
-  cat$depth,
-  breaks = seq(40, -5, -0.1),
-  xlim = c(-5, 40),
-  main = "Histogram of depths (100m bins)",
-  xlab = "Depth [km]"
-)
+## Missing values
+ 
+A quick check of how many entries are missing in each field: none.
+ 
+```{r missing}
+colSums(is.na(cat))
 ```
 
+## Event timing artefacts
+ 
+Although we have now filtered our catalogue to earthquake events only, it still remains a possibility that a few **quarry blasts** (controlled explosions) can be mislabelled as earthquakes. Unlike natural earthquakes, blasts happen during working hours on weekdays, so a spike in a particular time-of-day is a red flag for contamination. 
+The hour-of-day frequency plot actually reveals a slight drop during the working day. There are a couple of possible explanations for this. The first is **detection asymmetry** - lower night-time cultural noise lowers the detection threshold, revealing more small events [@rydelek1989testing]. The second is a potential artefact - real earthquakes have been mislabelled as blasts and been stripped from the daytime population. An important note here is that events that occurred during the 2019 Ridgecrest sequence below $M2.5$ remain largely unreviewed [@scedc_changehistory], which might contribute to the latter.
+```{r hour-of-day}
+# Hour of day frequency
+ggplot(cat, aes(hour)) +
+  geom_bar() +
+  labs(title = "Event count by local hour-of-day",
+       subtitle = "Local time",
+       x = "Local (PST/PDT)", y = "Count")
+```
+ 
+We consider events above a magnitude which is likely above $M_c$ to eliminate the influence of time-of-day variations in $M_c$.
+Plotting the events above M2.5, we see relative uniformity throughout, with the exception of Friday evenings into Saturday morning. This is likely due to the aftershocks following the $M7.1$ Ridgecrest mainshock on Friday 5th July 2019 at ~20:20 PDT. We additionally see less notable outliers on Thursdays around $11:00$ and Wednesday around $17:00$, although these can be attributed to random noise. This indicates minimal mislabelling above $M2.5$.
+
+```{r hour-by-wday-big}
+# Frequency of events above M2.5 by day-of-week and hour-of-day
+cat %>%
+  filter(mag >2.5) %>%
+  count(wday, hour) %>%
+  ggplot(aes(hour, wday, fill = n)) +
+  geom_tile() + scale_fill_viridis_c() +
+  labs(title = "Large events (M > 2.5): hour x weekday",
+       x = "Hour (local)", y = NULL, fill = "Count")
+```
+
+## Depth artefacts
+ 
+Recall that depth is unknown and it is perhaps the hardest quantity to estimate, so its histogram often shows **artefacts** - spikes at "default" depths (e.g. exactly 10 km) where the location algorithm could not resolve depth and was left at a default value. A 1 km-bin
+histogram looks reasonable, with no clustering at $0$ and no dominant spikes at round depths.
+ 
+```{r depth-hist}
+# Histogram of depth (overview)
+ggplot(cat, aes(x=depth)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = "Depth histogram (1 km bins)", x = "Depth (km)", y = "Count")
+```
+To test for finer rounding artefacts directly, we inspect the distribution of the fractional part of the depth. A uniform distribution indicates no preferential reporting at particular decimal values.
+```{r depth-fractional}
+# Histogram of fractional component of depth
+ggplot(cat, aes(depth %% 1)) +
+  geom_histogram(binwidth = 0.01, boundary = 0) +
+  labs(title = "Fractional part of reported depth",
+       x = "Depth mod 1 (km)", y = "Count")
+```
+Plotting depth against real time shows a stable depth distribution across the catalogue, indicating consistent processing regimes.
+ 
+```{r depth-time}
+# Depth time series
+ggplot(cat, aes(datetime, depth)) +
+  geom_point(size = 0.1, alpha = 0.15) +
+  scale_y_reverse() +
+  labs(title = "Depth vs date-time (whole catalogue)",
+       x = NULL, y = "Depth (km)")
+```
+
+Regardless, as depth is not used in the temporal model, location quality only affects our analysis solely through spatial selection into the study region.
+ 
+## Location Quality
+`q` is the catalogue's own **location-quality grade** (A = best-located,D/Z = poorly located) [see @scedc_format]. The vast majority of events ($97.3 \%$) are grade *A* (+- 1 km horizontal distance, +- 2 km depth) and a further $1.13 \%$ grade B (+- 2 km horizontal distance, +- 5 km depth), with only $1.49 \%$ at grades C,D, or Z ($ \geq +- 5$km horizontal, no depth bound). The *0.75* category seems to be a data artefact - it is not listed as a valid data entry in the data set description. 
+
+A map of the `q` categories reveals an expected pattern - location quality lowers towards the edges of the network. However, there are examples of events with poor location quality close to the centre of the network, e.g.,  close to the Ridgecrest fore- and main-shock, potentially pointing to short-term aftershock incompleteness (STAI), which we discuss in detail when discussing magnitude of completeness.
+ 
+```{r quality}
+# Summary and map of quality categories 
+cat %>% count(q) %>% arrange(desc(n))
+
+cat%>%
+filter(q != "0.75")%>%
+ggplot()+base_map +
+  geom_point(aes(lon, lat, colour = q, alpha=q)) +
+  scale_colour_manual(values = c(A = "grey", B = "black",
+                        C = "orange", D = "red", Z = "blue")) +
+  geom_point(data = events, aes(lon, lat, shape = type), size = 3, stroke = 1.2) +
+  scale_shape_manual(values = c(Mainshock = 8, Foreshock = 5), name = "Key")+
+  scale_alpha_manual(values = c(A = 0.1, B = 0.4, C = 0.9, D = 0.9, Z = 0.9),
+                     guide = "none") +
+  scale_size_manual(values = c(A = 0.3, B = 0.4, C = 0.9, D = 1, Z = 1),
+                    guide = "none") +
+ coord_quickmap(xlim = range(cat$lon), ylim = range(cat$lat))+
+  labs(colour = "Location grade",
+       title = "Events by location-quality grade", x = "longitude", y = "latitude")
+```
+
+We also observe a magnitude dependence. The majority of hard-to-locate events are of a lower magnitude.
+
 ```{r}
-ggplot(cat, aes(x = datetime, y = depth)) +
+# Magnitude density by quality
+cat %>%
+  filter(q != "0.75")%>%
+  mutate(q = factor(q, levels = c("A","B","C","D","Z"))) %>%
+  ggplot(aes(mag, colour = q)) +
+  geom_density() +
+  scale_colour_manual(
+    values = c(A = "grey", B = "black", C = "orange", D = "red", Z = "blue"),
+    name   = "Location grade"
+  ) +
+  labs(title = "Magnitude density by location-quality grade",
+       x = "Magnitude", y = "Density")
+```
+
+Switching the relation, we see that as magnitude of the event increases from negative to $0$, the proportion of A events increase, reflecting the fact that more sensors can pick up the earthquake. On the other hand, as we go past $M0$, this figure starts to decrease, perhaps due to a rupturing of extended sources rather than points, leading to a hard-to-identify hypocentre.
+```{r}
+# Location grade composition by magnitude bin
+cat %>%
+filter(q != "0.75")%>%
+  mutate(q       = factor(q, levels = c("A","B","C","D","Z")),
+         mag_bin = floor(mag)) %>%
+  count(mag_bin, q) %>%
+  ggplot(aes(mag_bin, n, fill = q)) +
+  geom_col(position = "fill") +                       
+  scale_y_continuous(labels = scales::percent) +       
+  scale_fill_manual(
+    values = c(A = "grey70", B = "grey40", C = "orange", D = "red", Z = "blue"),
+    name   = "Location grade"
+  ) +
+  labs(title = "Location-grade composition by magnitude bin",
+       x = "Magnitude (1-unit bins)", y = "Percentage of events in bin")
+```
+
+## Magnitude reporting artefacts
+
+**Natural time** plots each event evenly spaced along the x-axis by its order,
+rather than its date. This stretches out busy periods so that structure hidden in
+dense clusters becomes visible. Here, there is not much evidence for artefacts 
+such as horizontal *banding* from magnitude rounding (at any time),
+or a spurious pile-up at magnitude 0. The most interesting point is
+**time varying sensitivity**. Following the largest event, we observe a sharp 
+increase in the lowest detected magnitude from $\sim 0$ to $\sim 2$, before
+gradual recovery, pointing to the aforementioned STAI.
+ 
+```{r mag-natural}
+# Magnitude vs event index
+ggplot(cat, aes(event_num, mag)) +
   geom_point(size = 0.1) +
-  ggtitle("Depth timeseries using natural time")
+  labs(title = "Magnitude vs natural time (event index)",
+       x = "Event number", y = "Magnitude")
 ```
+ 
+The absence of $M0$ clustering and the $0.01$ magnitude rounding are confirmed
+by a very fine histogram. The distribution appears near continuous and without a
+spike at 0.
+ 
+```{r mag-zero}
+# Magnitude histogram (fine bins)
+ggplot(cat, aes(mag)) +
+  geom_histogram(binwidth = 0.01, boundary = 0) +
+  coord_cartesian(xlim = c(-0.5, 3)) +
+  labs(title = "Fine magnitude histogram (0.01 bins): rounding artefacts",
+       x = "Magnitude", y = "Count")
+```
+
+# Magnitude completeness
+## Frequency-magnitude and completeness
+
+The magnitude distribution of the catalogue is described by the Gutenberg-Richter law [@gutenberg1944frequency],
+
+$$
+\log_{10}N_M=a-bM,
+$$
+where $N_M$ is the nymber of events of magnitude at least $M$, the $b$-value controls the relative frequency of large to small events, and the $a$-value represents the intercept (number of events of non-negative magnitude). We estimate $b$ by a maximum- likelihood estimator [@aki1965maximum,@utsu1965method], named the Aki-Utsu estimator. Applying the correction for magnitude binning [@bender1983maximum], it reads:
+$$
+\hat{b} = \frac{\log_{10} e}{\bar{M} - \left(M_c - \dfrac{\Delta M_{\text{bin}}}{2}\right)},
+$$
+where $\bar{M}$ is the mean magnitude of events above the magnitude threshold $M_c$ and $\Delta M_{bin}$ is the catalogue's magnitude bin width ($0.1$ here).
+
+The a-value follows by substituting $\hat{b}$ into the Gutenberg-Richter law,
+$$
+\hat{a}=\log_{10}N_{M_c}+\hat{b}M_c.
+$$
+
+### Completeness magnitude
+
+Note that the expressions above require $M_c$ - the magnitude of completeness above which all events are included.
+
+There are two primary subcategories of methods to determine magnitude of completeness. The first is network-based methods, which use station properties such as locations, detection probabilities, and network performance to inform magnitude of completeness. Although methods in this category incorporate more information in calculations of magnitude of completeness, they are complex and require large datasets. 
+
+As such, we focus on the other category: deriving $M_c$ directly from the catalogue. Here, we consider the three main methods in this category:
+
+- **Maximum curvature (MAXC)**. Point of maximum curvature on frequency-magnitude distribution (FMD) [@wiemer2000minimum]. A typical FMD of the catalogue will reveal three regions: incompleteness at low magnitudes (small events undetected),
+a straight log-linear part (good GR behaviour), and scatter at high magnitudes (too few big events for stable counts). The magnitude where the straight part begins is the **completeness magnitude $M_c$**. @woessner2005assessing suggests finding the magnitude bin with the highest frequency of events in the non-cumulative frequency-magnitude distribution.
+
+- **Goodness-of-fit test (GFT)**. The observed FMD is compared against synthetic Gutenberg-Richter distributions generated from the maximum-likelihood a- and b-values at each trial cutoff ($M_{co}$), with $M_c$ taken as the lowest magnitude at which the power law reproduces a fixed percentage: 
+
+$$
+R(a, b, M_{co}) = 100 \left(1 - \frac{\sum_{i:M_i \geq M_{co}} |B_i - S_i|}{\sum_i B_i}\right),
+$$
+
+where $B_i$ and $S_i$ are the observed and predicted cumulative
+number of events in each magnitude bin. Here we consider $90\%$, as $95 \%$ is rarely obtained for real catalogues [@wiemer2000minimum].
+
+- **b-value stability method (MBS)**. Based on the assumption that $b$-values ascend for $M_{co} < M_c$, remain constant for $M_{co} \geq M_c$, and ascend again for $M_{co} >> M_c$. With $\delta b=2.3 b^2 \sqrt{\frac{\sum_{i=1}^N(M_i-\bar{M})^2}{N(N-1)}}$ (the Shi-Bolt [@shibolt1982standard] uncertainty of the Aki b-value MLE [@aki1965maximum] estimate), $M_c$ is defined as the lowest $M_{co}$ where $|b_{ave}-b| < \delta b$, where $b_{ave}=\sum_{M_{i=co}}^{M_{co}+5dm} \frac{\hat{b}(M_{i})}{5}$[@woessner2005assesing], where $dm$ is the bin-size.
+
+### Whole catalogue $M_c$
+
+We utilise each of the aforementioned methods to provide a conservative estimate for the whole-catalogue magnitude of completeness, to provide better-informed selection of the Ridgecrest sequence.
+
+Both MAXC and GFT estimate a catalogue-wide completeness magnitude of $M_c = 0.8$, whereas MBS provides a more conservative $M_c = 1.8$. Since the present objective is to define the Ridgecrest sequence rather than estimate the GR parameters, we adopt $M_c = 0.8$. 
+```{r catalog-mc}
+# Whole catalogue magnitude of completeness 
+# Frequency-magnitude data
+gr <- gr_data(cat$mag, dm)
+
+# MAXC and GFT estimates
+mc_maxc <- estimate_mc_maxc(cat$mag, dm)
+mc_gft_val <- mc_gft(cat$mag, dm)$mc
+
+# Plot FMD and overlay MAXC and GFT estimates
+ggplot(gr, aes(mag)) +
+  geom_col(aes(y = incremental),fill = "grey75", colour = "black", width = dm) +
+  geom_line(aes(y = cumulative),colour = "steelblue",linewidth = 1) +
+  scale_y_log10() +
+  geom_vline(xintercept = mc_maxc, colour = "red", linetype = "dashed", 
+             linewidth = 0.8) +
+  geom_vline(xintercept = mc_gft_val, colour = "darkblue", linetype = "dashed",
+             linewidth = 0.8) +
+  annotate("text",  x = mc_maxc, y = max(gr$cumulative), 
+           label = paste0("MAXC = ", mc_maxc), colour = "red",
+           hjust = -0.05, vjust = -0.3) +
+  annotate("text", x = mc_gft_val,  y = max(gr$cumulative)/3, 
+           label = paste0("GFT = ", mc_gft_val),
+           colour = "darkblue", hjust = 1.5) +
+  labs(title = "Frequency-magnitude distribution", x = "Magnitude",
+    y = "Number of events (log scale)"
+  )
+
+# Plot b-values for each Mc
+mbs <- mc_mbs(cat$mag, dm)
+mbs$mc
+ggplot(mbs$curve, aes(mc, b)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.2) +
+  geom_errorbar(
+    aes(ymin = b - b_err,
+        ymax = b + b_err),
+    width = 0.03
+  ) +
+  geom_vline(xintercept = mbs$mc, colour = "forestgreen", linetype = "solid") +
+  geom_vline(xintercept = mc_maxc, colour = "red", linetype = "dashed") +
+  geom_vline(xintercept = mc_gft_val, colour = "darkblue", linetype = "dashed") +
+  annotate("text",  x = mc_maxc, y = max(mbs$b), 
+           label = paste0("MAXC = ", mc_maxc), colour = "red",
+           hjust = -0.05, vjust = -0.3) +
+  annotate("text", x = mc_gft_val,  y = max(mbs$b)/3, 
+           label = paste0("GFT = ", mc_gft_val),
+           colour = "darkblue", hjust = 1.5, vjust = -1) +
+  annotate("text",  x = mbs$mc, y = max(mbs$b), 
+           label = paste0("MBS = ", mbs$mc), colour = "forestgreen",
+           hjust = -0.5, vjust = -0.3) +
+  labs(title = "b-value stability", x = expression(M[c]), y = expression(hat(b))
+  )
+```
+
+### Completeness drift
+
+We use GFT and MAXC to estimate magnitude of completeness ($M_c$) *within each year*. This checks for **completeness drift**, where the network gets better at *detecting* small earthquakes over time.
+
+The plot indicates that $M_c$ is essentially *stationary* across the decade, meaning there is no progressive detection improvement to correct for. While it may be tempting to consider a $M_c$ of $1-1.2$ going forwards, these are annual means and so blur any sub-annual structure, in particular the STAI that arises when a large mainshock and its early aftershocks obscure smaller events and can saturate nearby stations. This effect is already visible even at this coarse resolution: for both methods, $M_c$ sharply rises between $2018$ and $2019$ (when the Ridgecrest mainshock occured).
+```{r annual-mc}
+# Magnitude of completeness over time (determined by MAXC and GFT)
+cat %>%
+  group_by(year) %>%
+  summarise(n= n(),
+            mc_maxc = estimate_mc_maxc(mag, dm),
+            mc_gft  = mc_gft(mag, dm)$mc,
+            .groups = "drop") %>%
+  pivot_longer(c(mc_maxc, mc_gft), names_to = "method",
+                      values_to = "mc") %>%
+  ggplot(aes(year, mc, colour = method)) +
+  geom_line() + geom_point(size = 1) +
+  scale_x_continuous(breaks = seq(2016, 2025, 3)) +
+  scale_colour_discrete(labels = c(mc_maxc = "MAXC", mc_gft = "GFT"))+
+  labs(title = "Completeness magnitude by year (MAXC vs GFT)",
+       subtitle = "No clear trend in completeness",
+       x = "Year", y = "Mc", colour = "Method")
+```
+
+### Criticisms
+
+There are naturally criticisms of this approach, such as the right-tail of the distribution, which implies the possibility of events such as $M10$ earthquakes, which to this day have not yet occurred. As such, there have been many advancements made to the GR law since its first implementation in $1949$, such as the **tapered** GR law [@kagan2002seismic], yet it remains the standard for earthquake modelling, particularly where we avoid overcomplicating models.
+
+More recent estimators are designed to be robust to STAI that raises $M_c$ after large events - most notably the $b$-positive estimator of @vanderelst2021bpositive, which estimates $b$ from the positive differences between successive magnitudes. We nonetheless stick with the Aki-Utsu estimator for simplicity.
+
+# Sequence selection
+
+Having observed whole catalogue properties, we move onto consideration of the Ridgecrest sequence. To this end, we set the spatial and temporal windows that define the sequence, based on events in the catalogue with magnitude above the loose catalogue $M_c = 0.8$. 
+## Spatial window 
+ 
+We consider a hex plot of all events post the mainshock, which provides density of event occurrence. This reveals areas of high seismicity - in particular to the northwest and southwest of the Ridgecrest mainshock. Additionally, we observe high seismicity stretching from the centre of the catalogue towards the Mexican border. The purple/black region in between this region and the Ridgecrest region highlights unrelated triggering - California displays complex fault geometry, so these events are likely a result of a different earthquake.
+ 
+```{r cat-heatmap}
+# Retain only events with magnitude above 0.8 in determination of the spatiotemporal window.
+
+cat_comp <- cat %>% filter(mag >= 0.8)
+cat_comp %>%
+  filter(datetime > mainshock_time) %>%
+  ggplot(aes(lon, lat)) +
+  base_map +
+  geom_hex(bins = 1000) +                                  
+  geom_point(data = events, aes(lon, lat, shape = type),
+             size = 3, colour = "cyan", stroke = 1.2) +   
+  scale_shape_manual(values = c(Mainshock = 8, Foreshock = 5), name = "Key") +
+scale_fill_viridis_c(option = "inferno", trans = "log10", name = "Count") +  
+  coord_quickmap(xlim = range(cat$lon), ylim = range(cat$lat)) +
+  labs(title = "Aftershock density (log colour scale)",
+       x = "Longitude", y = "Latitude")
+```
+
+The `ETAS.inlabru` method supports rectangular regions only. Zooming in and increasing the resolution of the hex map, we overlay three candidate spatial windows. The red window, used by @bayliss2020data has corners $[35^\circ N, -118^\circ E], [37^\circ N, -117^\circ E]$. This paper was interested in characterising the background seismicity on a declustered Ridgecrest catalogue, and was therefore able to consider a more conservative region. The dark blue window, used by @vanderelst2021bpositive,  has corners $[35.2^\circ N, -118.2^\circ E], [36.4^\circ N, -117^\circ E]$. We extend this box further north (up to $36.6^\circ N$) for the green window, which includes further events that seem Ridgecrest-related.
+
+```{r spatial-window}
+# Candidate spatial windows for Ridgecrest aftershock zone
+# Data frame for windows
+box_data <- data.frame(
+  xmin = c(-118, -118.2, -118.2),
+  xmax = c(-117, -117, -117),
+  ymin = c(35, 35.2, 35.2),
+  ymax = c(37, 36.4, 36.6),
+  window = c("Bayliss et al. (2020)", "van der Elst (2021)", "Proposed window") 
+)
+
+box_data$window <- factor(box_data$window, levels = c(
+  "Bayliss et al. (2020)", 
+  "van der Elst (2021)", 
+  "Proposed window"
+))
+
+# Plot
+cat_comp %>%
+  filter(datetime > mainshock_time) %>%
+  ggplot(aes(lon, lat)) +
+  base_map +
+  geom_hex(bins = 8000) +                             
+  geom_point(data = events, aes(lon, lat, shape = type),
+             size = 3, colour = "cyan", stroke = 1.2) +
+  geom_rect(data = box_data, 
+            aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, colour = window),
+            inherit.aes = FALSE, fill = NA, linewidth = 0.5) +
+  scale_colour_manual(
+    name = "Windows",
+    values = c("Bayliss et al. (2020)" = "red", "van der Elst (2021)" = "darkblue", "Proposed window" = "forestgreen")
+  ) +
+  scale_shape_manual(values = c(Mainshock = 8, Foreshock = 5), name = "Key") +
+  scale_fill_viridis_c(option = "inferno", trans = "log10", name = "Count") +
+  coord_quickmap(xlim = c(mainshock_lon - 1.5, mainshock_lon + 1.5), 
+                 ylim = c(mainshock_lat - 1.5, mainshock_lat + 1.5)) +
+  labs(title = "Aftershock density (log colour scale)",
+       x = "Longitude", y = "Latitude")
+```
+
+```{r filter-spatial}
+# Restrict spatial window, assists in determining temporal window
+cat_spatial <- cat_comp%>%filter(lon >= -118.2, lon <= -117, lat >= 35.2, lat <= 36.6)
+```
+
+## Temporal Window
+
+We plot cumulative events over time to provide an initial assessment of the temporal evolution of seismicity, including:
+- When the quiescent period begins prior to the foreshock
+- The duration over which elevated seismicity can reasonably be attributed to the mainshock.
+
+The former is relatively trivial, whereas defining the latter involves more work. @hainzl2016 defines the apparent aftershock duration as the time required for the aftershock rate to decay to the background seismicity rate. Here, background seismicity is estimated from the average seismicity rate observed prior to the $M6.4$ foreshock (@shiratori1925sagami, as reviewed by @utsu1995, yielding a rate of $2.56$ events/day.
+
+We first plot a cumulative event count to illustrate the evolution of the sequence (note this approach does not account dor temporal variations in catalogue completeness and considers the previously derived whole-catalogue $M_c$). To assess the transition towards background-like activity, daily event rate are calculated and smoothed using a trailing 90-day rolling mean evaluated at quarterly intervals. Rather than defining sequence termination solely as the first point at which the rate reaches the background level, we identify the point at which seismicity has approached and stabilised near the background rate while avoiding potential contamination from later independent seismic sequences.
+
+Based on this assessment, 1 July 2023 is selected as the end of the Ridgecrest aftershock analysis window. By this time, the preceding 90-day mean seismicity rate has largely stabilised, although it remains elevated relative to the estimated pre-foreshock background rate of 2.56 events/day. This indicates that the rapid decay phase of the triggered sequence has largely concluded, while retaining the later-time decay tail required for analysis of the temporal evolution of aftershock productivity. The selected window provides approximately four years of post-mainshock observations and 3.5 years of pre-foreshock activity for comparison and estimation of background seismicity. Although longer background catalogues could further constrain the regional seismicity rate, the available interval provides a consistent reference period for this analysis [@naylor2023].
+
+```{r temporal-window}
+### Identifying temporal window - evaluating rolling mean event counts quarterly
+# Add cumulative count and days since foreshock columns (negative for events before foreshock)
+cat_spatial_cumulative <- cat_spatial %>%
+  arrange(datetime) %>%
+  mutate(cumulative_count = row_number(),
+    days_from_foreshock = days_since(datetime, foreshock_time)
+)
+
+### Calculate background seismicity rate
+
+# Retain only events prior to the foreshock (activity heightened after foreshock)
+pre_foreshock <- cat_spatial_cumulative %>%
+  filter(days_from_foreshock < 0)
+
+# Slope = Total events in window / Total days in window
+baseline_slope <- nrow(pre_foreshock) /  max(abs(pre_foreshock$days_from_foreshock))
+
+print(paste("Baseline background rate:", round(baseline_slope, 3), "events/day"))
+
+### Post-mainshock daily rate
+
+# 3-month checkpoints after mainshock
+checkpoints <- tibble(
+  date = seq(
+    from = as.Date("2019-10-01"),
+    to   = post_end,
+    by   = "3 months"
+  )
+)
+
+# Average 30-day rolling rates around each checkpoint
+checkpoint_rates <- checkpoints %>%
+  rowwise() %>%
+  mutate(
+    mean_rolling_rate = mean(
+      post_daily$rolling_rate[
+        post_daily$date > date %m-% months(3) &
+        post_daily$date <= date
+      ],
+      na.rm = TRUE
+    )
+  ) %>%
+  ungroup()
+
+ggplot(checkpoint_rates, aes(date, log(mean_rolling_rate))) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  geom_hline(
+    yintercept = log(baseline_slope),
+    linetype = "dashed",
+    colour = "red"
+  ) +
+  labs(
+    title = "Post-mainshock seismicity decay",
+    x = "Checkpoint date",
+    y = "Mean 30-day rolling event rate \n
+    (preceding 3 months), log-scale"
+  )
+```
+```{r cumulative-visualisation}
+# Visualisation of cumulative seismicity plots
+sequence_end <- as.POSIXct("2023-07-01", tz = "UTC")
+
+ggplot(cat_spatial_cumulative,
+       aes(datetime, cumulative_count)) +
+  geom_step(colour = "black", linewidth = 0.8) +
+  geom_vline(xintercept = foreshock_time,  colour = "darkblue",
+             linetype = "dashed") +
+  geom_vline(xintercept = mainshock_time, colour = "red",
+             linetype = "dashed") +
+  geom_vline(xintercept = sequence_end,  colour = "forestgreen",
+             linetype = "dashed") +
+  annotate( "text", x = foreshock_time, y = max(cat_spatial_cumulative$cumulative_count), label = "Foreshock",
+    colour = "darkblue",hjust = -0.1) +
+  annotate("text", x = mainshock_time,y = 0.95 * max(cat_spatial_cumulative$cumulative_count), label = "Mainshock",
+    colour = "red",hjust = -0.1) +
+  annotate("text", x = sequence_end, y = 0.90 * max(cat_spatial_cumulative$cumulative_count), label = paste( "Sequence end\n",  format(sequence_end, "%Y-%m-%d") ), colour = "forestgreen",hjust = -0.1,
+           vjust = 1 ) +
+  labs(
+    title = "Cumulative seismicity through time",
+    x = "Date",
+    y = "Cumulative number of earthquakes"
+  )
+```
+
+```{r filter-temporal}
+# Restrict to chosen spatio-temporal region. Bring back events below whole
+# catalogue Mc for rigorous sequence Mc and b-value determination
+cat_ridgecrest <- extract_sequence(cat,lon_range = c(-118.2, -117),lat_range = c(35.2, 36.6),t_range = c(min(cat$datetime), sequence_end))
+```
+
+# Sequence characterisation
 # References
 
 ::: {#refs}

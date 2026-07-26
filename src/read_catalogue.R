@@ -71,15 +71,15 @@ read_catalogue <- function(path, tz = "America/Los_Angeles",
   cat <- cat[ok, , drop = FALSE]
   
   # Order by natural time and add convenience columns for the EDA
-  # datetime stays UTC; local-time features are derived in `tz`.
-  cat <- cat[order(cat$datetime), , drop = FALSE]
+  # datetime, month, year stays UTC; local-time features are derived in `tz`.
+  cat <- cat[order(cat$datetime), , drop = FALSE] 
   cat$event_num <- seq_len(nrow(cat))   
-  cat$local <- with_tz(cat$datetime,tz)
-  cat$year      <- year(cat$local)
-  cat$month     <- month(cat$local, label = TRUE, abbr = TRUE)
-  cat$month_start <- floor_date(cat$local, "month")
-  cat$hour      <- hour(cat$local) 
-  cat$wday      <- wday(cat$local, label = TRUE, abbr = FALSE, week_start = 1)
+  cat$local <- with_tz(cat$datetime,tz) # UTC
+  cat$year      <- year(cat$datetime)   # UTC
+  cat$month     <- month(cat$datetime, label = TRUE, abbr = TRUE)  # UTC
+  cat$month_start <- floor_date(cat$datetime, "month")  # UTC
+  cat$hour      <- hour(cat$local) # local
+  cat$wday      <- wday(cat$local, label = TRUE, abbr = FALSE, week_start = 1) #
   rownames(cat) <- NULL
   cat
 }
