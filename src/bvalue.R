@@ -8,13 +8,14 @@
 #' by default, and the Shi & Bolt (1982) standard error.
 #'
 #' @param mags Numeric vector of magnitudes.
-#' @param mc Completeness magnitude; only events with `mags >= mc` are used.
+#' @param mc Magnitude cut-off; only events with `mags >= mc` are used.
 #' @param dm Magnitude bin width (default 0.1).
 #' @param correction Amount subtracted from `mc` in the denominator. Defaults to
 #'   `dm/2` (the Bender binning correction). Set `correction = 0` for the
 #'   uncorrected continuous Aki (1965) estimator.
 #' @return Named numeric vector: `b`, `b_err` (Shi & Bolt error) and `n` (events
 #'   used). `b`/`b_err` are `NA` if fewer than two events lie above `mc`.
+#' @examples b_aki(c(3.2, 4.1, 0.5), mc = 3.0)
 #' @export
 b_aki <- function(mags, mc, dm = 0.1, correction = dm / 2) {
   m <- mags[mags >= mc & is.finite(mags)]

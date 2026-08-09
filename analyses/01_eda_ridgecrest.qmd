@@ -668,7 +668,6 @@ ggplot(gr, aes(mag)) +
 
 # Plot b-values for each Mc
 mbs <- mc_mbs(cat$mag, dm)
-mbs$mc
 ggplot(mbs$curve, aes(mc, b)) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 1.2) +
@@ -899,7 +898,386 @@ ggplot(cat_spatial_cumulative,
 cat_ridgecrest <- extract_sequence(cat,lon_range = c(-118.2, -117),lat_range = c(35.2, 36.6),t_range = c(min(cat$datetime), sequence_end))
 ```
 
-# Sequence characterisation
+# $M_0$ and $b$
+
+
+Having determined the spatio-temporal window for the Ridgecrest sequence, we know determine the fixed modelling parameters - namely $M_0$ and the Gutenberg-Richter $b$-value. Recall that for the entire catalogue both MAXC and GFT estimate a catalogue-wide completeness magnitude of $M_c = 0.8$, whereas MBS provides a more conservative $M_c = 1.8$. 
+
+```{r sequencce-mc}
+# Whole sequence magnitude of completeness 
+# Frequency-magnitude data
+gr_ridgecrest <- gr_data(cat_ridgecrest$mag, dm)
+
+# MAXC and GFT estimates
+mc_maxc <- estimate_mc_maxc(cat_ridgecrest$mag, dm)
+mc_gft_val <- mc_gft(cat_ridgecrest$mag, dm)$mc
+
+# Plot FMD and overlay MAXC and GFT estimates
+ggplot(gr_ridgecrest, aes(mag)) +
+  geom_col(aes(y = incremental),fill = "grey75", colour = "black", width = dm) +
+  geom_line(aes(y = cumulative),colour = "steelblue",linewidth = 1) +
+  scale_y_log10() +
+  geom_vline(xintercept = mc_maxc, colour = "red", linetype = "dashed", 
+             linewidth = 0.8) +
+  geom_vline(xintercept = mc_gft_val, colour = "darkblue", linetype = "dashed",
+             linewidth = 0.8) +
+  annotate("text",  x = mc_maxc, y = max(gr_ridgecrest$cumulative), 
+           label = paste0("MAXC = ", mc_maxc), colour = "red",
+           hjust = -0.05, vjust = -0.3) +
+  annotate("text", x = mc_gft_val,  y = max(gr_ridgecrest$cumulative)/3, 
+           label = paste0("GFT = ", mc_gft_val),
+           colour = "darkblue", hjust = 1.5) +
+  labs(title = "Frequency-magnitude distribution", x = "Magnitude",
+    y = "Number of events (log scale)"
+  )
+
+# Plot b-values for each Mc
+mbs <- mc_mbs(cat_ridgecrest$mag, dm)
+ggplot(mbs$curve, aes(mc, b)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.2) +
+  geom_errorbar(
+    aes(ymin = b - b_err,
+        ymax = b + b_err),
+    width = 0.03
+  ) +
+  geom_vline(xintercept = mbs$mc, colour = "forestgreen", linetype = "solid") +
+  geom_vline(xintercept = mc_maxc, colour = "red", linetype = "dashed") +
+  geom_vline(xintercept = mc_gft_val, colour = "darkblue", linetype = "dashed") +
+  annotate("text",  x = mc_maxc, y = max(mbs$b), 
+           label = paste0("MAXC = ", mc_maxc), colour = "red",
+           hjust = -0.05, vjust = -0.3) +
+  annotate("text", x = mc_gft_val,  y = max(mbs$b)/3, 
+           label = paste0("GFT = ", mc_gft_val),
+           colour = "darkblue", hjust = 1.5, vjust = -1) +
+  annotate("text",  x = mbs$mc, y = max(mbs$b), 
+           label = paste0("MBS = ", mbs$mc), colour = "forestgreen",
+           hjust = -0.5, vjust = -0.3) +
+  labs(title = "b-value stability", x = expression(M[c]), y = expression(hat(b))
+  )
+```
+
+While it's tempting to determine the $M_0$ from the entire catalogue $M_c$, we must consider short-term aftershock incompleteness (STAI). This effect is observed in the below graph of weekly $M_c$ - note the increase across all methods for $M_c$ values post fore- and mainshock: there is no single value that describes the catalogue.
+```{r rolling-mc}
+# Rolling Mc - completeness threshold increases in wake of foreshock/mainshock activity
+cat_ridgecrest %>%
+  filter(datetime >= as.POSIXct("2019-05-30", tz = "UTC"),
+         datetime <= as.POSIXct("2023-07-01", tz = "UTC")) %>%
+  arrange(datetime) %>%
+  mutate(window_date = cut(datetime,
+                      breaks = seq(as.POSIXct("2019-05-30", tz = "UTC"),
+                                   as.POSIXct("2023-07-02", tz = "UTC"),
+                                   by = "7 days"),labels = FALSE) %>% 
+    as.numeric(),
+    window_label = as.POSIXct("2019-05-30", tz = "UTC") + (window_date - 1 + 0.5) * 7 * 86400  
+  ) %>%
+  group_by(window_label) %>%
+ summarise(n = n(),mc_gft = mc_gft(mag, dm, min_n = 20)$mc,
+          mc_maxc = estimate_mc_maxc(mag, dm), mc_mbs = mc_mbs(mag, dm)$mc,.groups = "drop") %>%
+  filter(n >= 20) %>%
+  pivot_longer(c(mc_gft, mc_maxc, mc_mbs), names_to = "method", values_to = "mc") %>%
+  ggplot(aes(window_label, mc, colour = method, linetype = method)) +
+  geom_line(linewidth = 0.8) + geom_point(size = 2, alpha = 0.7) +
+  geom_vline(xintercept = foreshock_time, linetype = "dashed", 
+             colour = "darkblue", linewidth = 0.8, alpha = 0.5) +
+  geom_vline(xintercept = mainshock_time, linetype = "dashed", 
+             colour = "red", linewidth = 0.8, alpha = 0.5) +
+  annotate("text", x = foreshock_time, y = Inf, label = "M6.4", 
+           colour = "darkblue", hjust = -0.2, vjust = 1.2, size = 3.5) +
+  annotate("text", x = mainshock_time, y = Inf, label = "M7.1", 
+           colour = "red", hjust = -0.2, vjust = 1.2, size = 3.5) +
+  scale_colour_manual(values = c(mc_gft = "steelblue", mc_maxc = "orange", 
+                                 mc_mbs = "forestgreen"),
+                      labels = c(mc_gft = "GFT", mc_maxc = "MAXC", 
+                                 mc_mbs = "MBS")) +
+  scale_linetype_manual(values = c(mc_gft = "solid", mc_maxc = "dashed",
+                                   mc_mbs = "dashed"),
+                        labels = c(mc_gft = "GFT", mc_maxc = "MAXC",
+                                   mc_mbs = "MBS")) +
+  labs(title = "Magnitude of completeness: End of May – End of June 2023 (7-day windows)",
+       x = "Date", y = "Mc",
+       subtitle = "Weekly windows show Mc spike post-mainshock and recovery",
+       colour = "Method", linetype = "Method")
+```
+Zooming into a daily resolution reveals further details for the week beginning on the date of the foreshock - the MAXC method suggests a peak magnitude of completeness of $2$, while MBS provides a much harsher $3.3$, both on the day of the mainshock (6th July 2019). GFT returns NA, indicating a significant mismatch between empirical and theoretical (Gutenberg-Richter) magnitudes.
+
+```{r mainshock-mc}
+# Daily magnitude of completeness
+cat_ridgecrest %>%
+  filter(datetime >= as.POSIXct("2019-07-04", tz = "UTC"),
+         datetime <= as.POSIXct("2019-07-10", tz = "UTC")) %>%
+  arrange(datetime) %>%
+  mutate(window_date = cut(datetime,
+                      breaks = seq(as.POSIXct("2019-07-04", tz = "UTC"),
+                                   as.POSIXct("2019-07-11", tz = "UTC"),
+                                   by = "1 day"),labels = FALSE) %>% 
+    as.numeric(),
+    window_label = as.POSIXct("2019-07-04", tz = "UTC") + (window_date - 1) * 86400 
+  ) %>%
+  group_by(window_label) %>%
+ summarise(n = n(),mc_gft = mc_gft(mag, dm, min_n = 20)$mc,
+          mc_maxc = estimate_mc_maxc(mag, dm), mc_mbs = mc_mbs(mag, dm)$mc,.groups = "drop") %>%
+  filter(n >= 20) %>%
+  pivot_longer(c(mc_gft, mc_maxc, mc_mbs), names_to = "method", values_to = "mc") %>%
+  ggplot(aes(window_label, mc, colour = method, linetype = method)) +
+  geom_line(linewidth = 0.8) + geom_point(size = 2, alpha = 0.7) +
+  geom_vline(xintercept = foreshock_time, linetype = "dashed", 
+             colour = "darkblue", linewidth = 0.8, alpha = 0.5) +
+  geom_vline(xintercept = mainshock_time, linetype = "dashed", 
+             colour = "red", linewidth = 0.8, alpha = 0.5) +
+  annotate("text", x = foreshock_time, y = Inf, label = "M6.4", 
+           colour = "darkblue", hjust = -0.2, vjust = 1.2, size = 3.5) +
+  annotate("text", x = mainshock_time, y = Inf, label = "M7.1", 
+           colour = "red", hjust = -0.2, vjust = 1.2, size = 3.5) +
+  scale_colour_manual(values = c(mc_gft = "steelblue", mc_maxc = "orange", 
+                                 mc_mbs = "forestgreen"),
+                      labels = c(mc_gft = "GFT", mc_maxc = "MAXC", 
+                                 mc_mbs = "MBS")) +
+  scale_linetype_manual(values = c(mc_gft = "solid", mc_maxc = "dashed",
+                                   mc_mbs = "dashed"),
+                        labels = c(mc_gft = "GFT", mc_maxc = "MAXC",
+                                   mc_mbs = "MBS")) +
+  labs(title = "Magnitude of completeness: July 4th - 10th 2019 (1-day window)",
+       x = "Date", y = "Mc",
+       subtitle = "Daily windows show Mc spike",
+       colour = "Method", linetype = "Method")
+```
+
+We explore this departure from the GR further for the 6th July (the date of the mainshock). The peak frequency bin is at $M2$, however, we see a relatively flat GR curve between approximately $1.5-2.5$ - this departs from standard empirical observations. The lack of clear exponential drop-off at any magnitude explains why the GFT could not be found - for no cutoff magnitude did empirical and theretical Gutenberg-Richter distributions look similar. This effect is largely resolved by one week after the mainshock (13th July).
+
+```{r mainshock-gr}
+# FMD for selected dates - recovery
+july6 <- cat_ridgecrest %>%
+  filter(datetime >= as.POSIXct("2019-07-06", tz = "UTC"),
+         datetime < as.POSIXct("2019-07-07", tz = "UTC"))
+
+july8 <- cat_ridgecrest %>%
+  filter(datetime >= as.POSIXct("2019-07-08", tz = "UTC"),
+         datetime < as.POSIXct("2019-07-09", tz = "UTC"))
+
+july13 <- cat_ridgecrest %>%
+  filter(datetime >= as.POSIXct("2019-07-13", tz = "UTC"),
+         datetime < as.POSIXct("2019-07-14", tz = "UTC"))
+
+gr_data(july6$mag)%>%
+  filter(cumulative > 0, incremental > 0)%>%
+  ggplot(aes(mag)) +
+  geom_col(aes(y = incremental),fill = "grey75", colour = "black", width = dm) +
+  geom_line(aes(y = cumulative),colour = "steelblue",linewidth = 1) +
+  scale_y_log10()+
+  labs(title = "Frequency-magnitude distribution (6/7/2019)", x = "Magnitude",
+    y = "Number of events (log scale)"
+  )
+
+gr_data(july8$mag)%>%
+  filter(cumulative > 0, incremental > 0)%>%
+  ggplot(aes(mag)) +
+  geom_col(aes(y = incremental),fill = "grey75", colour = "black", width = dm) +
+  geom_line(aes(y = cumulative),colour = "steelblue",linewidth = 1) +
+  scale_y_log10()+
+  labs(title = "Frequency-magnitude distribution (8/7/2019)", x = "Magnitude",
+    y = "Number of events (log scale)"
+  )
+
+gr_data(july13$mag)%>%
+  filter(cumulative > 0, incremental > 0)%>%
+  ggplot(aes(mag)) +
+  geom_col(aes(y = incremental),fill = "grey75", colour = "black", width = dm) +
+  geom_line(aes(y = cumulative),colour = "steelblue",linewidth = 1) +
+  scale_y_log10()+
+  labs(title = "Frequency-magnitude distribution (12/7/2019)", x = "Magnitude",
+    y = "Number of events (log scale)"
+  )
+```
+
+This motivates exploration of time-varying magnitude of completeness. This has been implemented in frequentist frameworks \citep{Helmstetter2006} and more recently in Bayesian ETAS models via rate-dependent incompleteness corrections \citep{Kamranzad2025}. However, the latter approach lacks publicly-available documentation for the inlabru implementation and introduces methodological complexity beyond the scope of this work. We therefore adopt a fixed $M_c$ threshold, acknowledging this as consideration for future refinement.
+
+The above methods validate $M_0 = 2.5$ - while $M_0 = 2.0$ seems attractive (being the peak daily value MAXC estimate of completeness), we recall that MAXC is a conservative estimate. This is further validated through peak daily MBS estimate of $M_c = 3.3$. We pick $2.5$ as the middle ground between both estimates - going any higher risks a significant reduction in available data to fit the model, while going any lower risks introduction of bias into posteriors (in particular misfitting of decay laws -- overestimation of $p$ for Omori--Utsu, underestimation of aftershock productivity of strong earthquakes, overestimation of $c$) due to STAI @hainzl2022, @kagan2004short. 
+
+```{r mc-counts}
+# Number of available events at each magnitude cutoff
+for (m in c(1, 1.5, 2, 2.5, 3, 3.3)) {
+  cat("M0 =", m, ":", sum(cat_ridgecrest$mag >= m, na.rm = TRUE), "events\n")
+}
+```
+
+The corresponding $b$-value from the Aki-Utsu MLE is $0.79 \pm 0.016$ on 3,336 events.
+
+```{r b-value}
+# Filter to observations above cutoff and compute b-value MLE for whole sequence
+cat_fit <- cat_ridgecrest %>% filter (mag >= 2.5, !is.na(mag))
+b_aki(cat_fit$mag, mc = 2.5, dm = 0.1)
+```
+
+```{r b-value-pre}
+# Filter to observations above cutoff and compute b-value MLE for pre-foreshock
+cat_fit_background <- cat_ridgecrest %>% filter (mag >= 2.5, 
+                                        datetime < foreshock_time, !is.na(mag))
+b_aki(cat_fit_background$mag, mc = 2.5, dm = 0.1)
+```
+
+```{r b-value-post}
+# Filter to observations above cutoff and compute b-value MLE for post-mainshock
+cat_fit_active <- cat_ridgecrest %>% filter (mag >= 2.5, 
+                                        datetime >= mainshock_time, !is.na(mag))
+b_aki(cat_fit_active$mag, mc = 2.5, dm = 0.1)
+```
+
+# Visualising the sequence
+
+```{r}
+g_ou <- function(t, c1, p1) (1 + t / c1)^(-p1)
+ 
+g_ms <- function(t, c2, lam2, b2) {
+  (1 + t / c2)^(b2 - 1) * exp(-lam2 * ((c2 + t)^b2 - c2^b2))
+}
+ 
+g_rs <- function(t, B, ta) {
+  e <- exp(-t / ta)
+  (1 - B) * e / (1 - B * e)
+}
+ 
+## Total mass  G_k(0, Inf)
+mass_ou <- function(c1, p1)        c1 / (p1 - 1)
+mass_ms <- function(c2, lam2, b2)  c2^(1 - b2) / (lam2 * b2)
+mass_rs <- function(B, ta)        -(1 - B) * ta * log(1 - B) / B
+ 
+## Normalised densities 
+f_ou <- function(t, c1, p1)       g_ou(t, c1, p1)       / mass_ou(c1, p1)
+f_ms <- function(t, c2, lam2, b2) g_ms(t, c2, lam2, b2) / mass_ms(c2, lam2, b2)
+f_rs <- function(t, B, ta)        g_rs(t, B, ta)        / mass_rs(B, ta)
+ 
+## Distribution functions
+## log1p(-x) = log(1 - x), used for numerical stability as B -> 1.
+F_ou <- function(t, c1, p1) 1 - (1 + t / c1)^(1 - p1)
+ 
+F_ms <- function(t, c2, lam2, b2) -expm1(-lam2 * ((c2 + t)^b2 - c2^b2))
+ 
+F_rs <- function(t, B, ta) 1 - log1p(-B * exp(-t / ta)) / log1p(-B)
+ 
+## Parameters  
+ 
+par_ou <- list(c1 = 0.011,  p1   = 1.12)
+par_ms <- list(c2 = 0.0004, lam2 = 1.01, b2 = 0.22)
+par_rs <- list(B  = 0.99998, ta  = 188)
+ 
+kernel_levels <- c("Omori--Utsu", "Modified stretched exponential", "Rate-state")
+
+## Evaluate on a logarithmic time grid
+t_grid <- 10^seq(-4, 4, length.out = 2000)   # days
+ 
+kern <- bind_rows(
+  tibble(t = t_grid,
+         kernel   = kernel_levels[1],
+         density  = f_ou(t_grid, par_ou$c1, par_ou$p1),
+         cumulative = F_ou(t_grid, par_ou$c1, par_ou$p1)),
+  tibble(t = t_grid,
+         kernel   = kernel_levels[2],
+         density  = f_ms(t_grid, par_ms$c2, par_ms$lam2, par_ms$b2),
+         cumulative = F_ms(t_grid, par_ms$c2, par_ms$lam2, par_ms$b2)),
+  tibble(t = t_grid,
+         kernel   = kernel_levels[3],
+         density  = f_rs(t_grid, par_rs$B, par_rs$ta),
+         cumulative = F_rs(t_grid, par_rs$B, par_rs$ta))
+) |>
+  mutate(kernel = factor(kernel, levels = kernel_levels))
+
+## Shared aesthetics
+kernel_cols <- setNames(c("#1b6ca8", "#e07b39", "#2e8b57"), kernel_levels)
+kernel_lty  <- setNames(c("solid", "dashed", "dotdash"),     kernel_levels)
+ 
+base_theme <- theme_bw(base_size = 10) +
+  theme(legend.title    = element_blank(),
+        legend.position = "bottom",
+        panel.grid.minor = element_line(linewidth = 0.15),
+        plot.title      = element_text(size = 10, face = "plain"))
+ 
+log_breaks <- 10^seq(-6, 6, by = 2)
+
+## Normalised density, log-log
+p_density <- ggplot(kern, aes(t, density, colour = kernel, linetype = kernel)) +
+  geom_line(linewidth = 0.6) +
+  scale_x_log10(breaks = log_breaks,
+                labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+  scale_y_log10(labels = scales::trans_format("log10", scales::math_format(10^.x)))  +
+  scale_colour_manual(values = kernel_cols) +
+  scale_linetype_manual(values = kernel_lty) +
+  labs(title = "(a) normalised kernel",
+       x = "time since triggering event (days)",
+       y = expression(f[k](t))) +
+  base_theme
+ 
+## Cumulative fraction, log time axis
+p_cumulative <- ggplot(kern, aes(t, cumulative, colour = kernel, linetype = kernel)) +
+  geom_line(linewidth = 0.6) +
+  scale_x_log10(breaks = log_breaks,
+                labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+  scale_y_continuous(limits = c(0, 1), expand = expansion(mult = c(0, 0.02))) +
+  scale_colour_manual(values = kernel_cols) +
+  scale_linetype_manual(values = kernel_lty) +
+  labs(title = "(b) cumulative fraction of triggering",
+       x = "time since triggering event (days)",
+       y = expression(F[k](t))) +
+  base_theme
+ 
+p_density
+p_cumulative
+```
+
+```{r}
+B_ill  <- 0.99
+ta_ill <- 100
+c_eff  <- (1 - B_ill) * ta_ill / B_ill      
+
+t_grid2 <- 10^seq(-2, 3.7, length.out = 2000)
+
+hybrid <- bind_rows(
+  tibble(t = t_grid2, curve = "Rate-state",
+         y = g_rs(t_grid2, B_ill, ta_ill)),
+  tibble(t = t_grid2, curve = "Omori--Utsu limit (p = 1)",
+         y = (1 + t_grid2 / c_eff)^(-1)),
+  tibble(t = t_grid2, curve = "Exponential limit",
+         y = (1 - B_ill) * exp(-t_grid2 / ta_ill))
+) |>
+  mutate(curve = factor(curve, levels = c("Rate-state",
+                                          "Omori--Utsu limit (p = 1)",
+                                          "Exponential limit")))
+
+hy_cols <- c("Rate-state" = "#2e8b57",
+             "Omori--Utsu limit (p = 1)" = "grey40",
+             "Exponential limit" = "grey40")
+hy_lty  <- c("Rate-state" = "solid",
+             "Omori--Utsu limit (p = 1)" = "dashed",
+             "Exponential limit" = "dotted")
+
+hy_base <- list(
+  geom_vline(xintercept = ta_ill, colour = "grey70", linewidth = 0.3),
+  annotate("text", x = ta_ill, y = 1, label = "italic(t[a])", parse = TRUE,
+           hjust = -0.3, vjust = 1, size = 3, colour = "grey40"),
+  geom_line(linewidth = 0.6),
+  scale_colour_manual(values = hy_cols),
+  scale_linetype_manual(values = hy_lty),
+  base_theme
+)
+
+## log-log
+ggplot(hybrid, aes(t, y, colour = curve, linetype = curve)) +
+  hy_base +
+  scale_x_log10() + scale_y_log10() +
+  coord_cartesian(ylim = c(1e-6, 1.5)) +
+  labs(title = "(a) log--log: power-law regime", x = "time (days)",
+       y = expression(g[3](t)))
+
+## log-linear
+ggplot(hybrid, aes(t, y, colour = curve, linetype = curve)) +
+  hy_base +
+  scale_y_log10() +
+  coord_cartesian(xlim = c(0, 600), ylim = c(1e-6, 1.5)) +
+  labs(title = "(b) log--linear: exponential regime", x = "time (days)",
+       y = expression(g[3](t)))
+```
+
+
 # References
 
 ::: {#refs}
