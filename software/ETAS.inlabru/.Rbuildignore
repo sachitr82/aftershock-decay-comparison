@@ -1,0 +1,17 @@
+^ETAS\.inlabru$
+^ETAS\.inlabru_
+^renv$
+^renv\.lock$
+^.*\.Rproj$
+^\.Rproj\.user$
+^docs$
+^_pkgdown\.yml$
+^pkgdown$
+^.*.html$
+^\.github$
+^notebooks$
+^README\.Rmd$
+^vignettes/articles$
+^data-raw$
+^\.lintr$
+^jarl\.toml$

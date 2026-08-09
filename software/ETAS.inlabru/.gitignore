@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+ETAS.inlabru.Rcheck
+.DS_Store
+docs
+*_files
+*_cache

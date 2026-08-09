@@ -1,0 +1,76 @@
+#############################
+#### Injection rate function
+#' @title Injection Rate function calculations
+#'
+#' @description
+#' Forward time integrated function for exponential rate decay, and its inverse
+#'
+#' @param a Event rate per unit volume injected
+#' @param V.i Injected volume
+#' @param tau Decay rate `[days]`
+#' @param T.i Time of injection event
+#' @param T2 End of temporal model domain
+#'
+#' @return `IntInjectionIntensity` returns the forward time integrated function
+#' for exponential rate decay.
+#' @export
+IntInjectionIntensity <- function(a = 50, V.i = 1, tau = 10, T.i, T2) {
+  expected.injection.events <-
+    -tau * V.i * a * (exp(-(T2 - T.i) / tau) - 1)
+
+  expected.injection.events
+}
+
+#' @rdname IntInjectionIntensity
+#'
+#' @param number.injected.events The number of expected injected events, used
+#'   for the inverse.
+#'
+#' @return `Inv_IntInjectionIntensity` returns the end time corresponding to
+#' a given expected number of injected events.
+#' @export
+Inv_IntInjectionIntensity <- function(a = 50,
+                                      V.i = 1,
+                                      tau = 10,
+                                      T.i,
+                                      number.injected.events) {
+  endTime <- T.i - tau * log(1 - number.injected.events / (tau * V.i * a))
+
+  endTime
+}
+
+#' Title
+#'
+#' @param a Induced event rate per unit volume.
+#' @param V.i Injected volume
+#' @param tau Decay rate `[days]`.
+#' @param beta.p Related to the b-value via `b ln(10)`.
+#' @param M0 Minimum magnitude threshold.
+#' @param T.i Time of injection `[days]`.
+#' @param T2 End of temporal model domain `[days]`.
+#'
+#' @return Catalogue of parent events induced by injection;
+#'   `data.frame(times, magnitudes)`
+#' @export
+sample_temporal_injection_events <- function(a = 50,
+                                             V.i = 1,
+                                             tau = 10,
+                                             beta.p,
+                                             M0,
+                                             T.i,
+                                             T2) {
+  bound.l <- 0 # It(th.p, th, T)
+  bound.u <- IntInjectionIntensity(
+    a = a, V.i = V.i, tau = tau, T.i = T.i, T2 = T2
+  )
+  n.ev <- rpois(1, bound.u)
+  unif.s <- runif(n.ev, min = bound.l, max = bound.u)
+  sample.ts <- Inv_IntInjectionIntensity(
+    a = a, V.i = V.i, tau = tau, T.i = T.i, number.injected.events = unif.s
+  )
+
+  samp.mags <- rexp(n.ev, rate = beta.p) + M0
+
+  samp.points <- data.frame(ts = sample.ts, magnitudes = samp.mags)
+  samp.points[!is.na(samp.points$ts), ]
+}
