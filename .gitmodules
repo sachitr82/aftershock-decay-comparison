@@ -1,3 +1,3 @@
 [submodule "ETAS.inlabru"]
-	path = ETAS.inlabru
+	path = software/ETAS.inlabru
 	url = https://github.com/sachitr82/ETAS.inlabru.git
