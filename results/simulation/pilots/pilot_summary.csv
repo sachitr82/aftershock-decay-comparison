@@ -1,4 +1,4 @@
-"kernel","n_fit","n_pre_mainshock","n_post_mainshock","n_forecast","n_total","max_magnitude","max_generation"
-"ou",1287,199,1088,258,1545,7.1,7
-"mse",1645,347,1298,1448,3093,7.1,11
-"rate_state",2573,329,2244,634,3207,7.1,15
+"kernel","n_total","n_pre_mainshock","n_post_mainshock","max_magnitude","max_generation"
+"ou",2013,258,1755,7.1,11
+"mse",2976,172,2804,7.1,14
+"rate_state",2221,416,1805,7.1,11

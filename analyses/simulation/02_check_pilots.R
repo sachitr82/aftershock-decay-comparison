@@ -17,11 +17,9 @@ summarise_catalogue <- function(cat, kernel) {
   
   data.frame(
     kernel = kernel,
-    n_fit = sum(cat$ts > T_fit_start &cat$ts < T_fit_end),
+    n_total = sum(cat$ts > T_fit_start &cat$ts < T_fit_end),
     n_pre_mainshock =  sum(cat$ts > T_fit_start & cat$ts < 0),
     n_post_mainshock = sum(cat$ts >= 0 & cat$ts < T_fit_end),
-    n_forecast = sum(cat$ts >= T_fit_end & cat$ts < T_forecast_end),
-    n_total =  sum(cat$ts > T_fit_start & cat$ts < T_forecast_end),
     max_magnitude = max(cat$magnitudes),
     max_generation = max(cat$gen)
   )
@@ -88,7 +86,7 @@ for (i in seq_len(nrow(calibration_index))) {
   
   catalogue_i <- generate_temporal_ETAS_synthetic(
     theta = truths[[kernel_i]], beta.p = beta_true, M0 = M0,
-    T1 = T_fit_start, T2 = T_forecast_end, Ht = mainshock_event,
+    T1 = T_fit_start, T2 = T_fit_end, Ht = mainshock_event,
     format = "df", kernel = kernel_i, Mmax = Mmax)
   
   out_i <- summarise_catalogue(catalogue_i, kernel_i)
@@ -122,10 +120,6 @@ calibration_summary <- do.call(rbind, lapply(names(truths), function(kernel){
     post_median = median(x$n_post_mainshock),
     post_q90 = quantile(x$n_post_mainshock, 0.90),
     
-    fit_q10 = quantile(x$n_fit, 0.10),
-    fit_median = median(x$n_fit),
-    fit_q90 = quantile(x$n_fit, 0.90),
-    
     total_q10 = quantile(x$n_total, 0.10),
     total_median = median(x$n_total),
     total_q90 = quantile(x$n_total, 0.90),
@@ -154,7 +148,6 @@ pilot_catalogues$kernel <- factor(
 p_mag <- ggplot(pilot_catalogues, aes(ts, magnitudes)) +
   geom_point(size = 0.7, alpha = 0.5) +
   geom_vline(xintercept = 0, linetype = "dashed") +
-  geom_vline(xintercept = T_fit_end, linetype = "dotted") +
   facet_wrap(~kernel, ncol = 1) +
   labs(x = "Time relative to mainshock (days)", y = "Magnitude") +
   theme_bw()
@@ -162,7 +155,7 @@ p_mag <- ggplot(pilot_catalogues, aes(ts, magnitudes)) +
 ggsave(file.path(pilot_dir, "pilot_magnitude_time.pdf"), p_mag, width = 8, height = 7)
 
 #===============================================================================
-# E. Save summaries
+# Save summaries
 #===============================================================================
 
 write.csv(pilot_summary, file.path(pilot_dir, "pilot_summary.csv"), 

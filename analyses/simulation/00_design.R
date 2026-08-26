@@ -19,7 +19,7 @@ M0 <- 2.5
 Mmax <- 7.1
 
 # Ridgecrest b-value (obtained from EDA)
-b_true <- 0.783
+b_true <- 0.793967
 beta_true <- b_true * log(10)
 
 #-------------------------------------------------------------------------------
@@ -30,19 +30,12 @@ mainshock_date <- as.Date("2019-07-06")
 
 fit_start_date <- as.Date("2016-01-01")
 
-# Boundary: events before this date are used for fitting
-fit_end_date <- as.Date("2022-01-06")
-
-# Boundary: forecast period ends immediately before this date
-forecast_end_date <- as.Date("2024-01-06")
-
 # Convert dates to days relative to mainshock
 
 T_fit_start <- as.numeric(fit_start_date - mainshock_date)
 
-T_fit_end <- as.numeric(fit_end_date - mainshock_date)
-
-T_forecast_end <- as.numeric(forecast_end_date - mainshock_date)
+# Full Ridgecrest post-mainshock observation window
+T_fit_end <- 2371
 
 #-------------------------------------------------------------------------------
 # Imposed Ridgecrest-like mainshock
@@ -77,7 +70,7 @@ gamma_true <- 0.22
 ta_true <- 188
 
 #-------------------------------------------------------------------------------
-# Common mainshock triggering mass before the fitting boundary [0,915)
+# Common mainshock triggering mass before the fitting boundary [0,T_fit_end)
 # Enables controlled comparison: given the same imposed mainshock, choose
 # parameters to return the same expected direct triggering before the fitting 
 # boundary, while changing shape in time of that triggering
@@ -196,6 +189,167 @@ initials <- list(
   
   rate_state = c(mu = 0.3, K = 0.1, alpha = 1, B = 100 / 100.2, ta = 100))
 
+#------------------------------------------------------------------------------
+# Baseline fitting priors
+#------------------------------------------------------------------------------
+
+bound_eps <- 1e-6
+prior_baseline <- list(
+  mu = list(dist = "gamma", shape = 0.5, rate = 0.5),
+  K = list(dist = "lognormal", meanlog = -1, sdlog = 0.5),
+  alpha = list(dist = "uniform", min = 0, max = 10),
+  
+  ou = list(
+    c = list(dist = "uniform", min = bound_eps, max = 1),
+    p = list(dist = "uniform", min = 1 + bound_eps, max = 2)
+  ),
+  
+  mse = list(
+    d = list(dist = "uniform", min = bound_eps, max = 1),
+    rho = list(dist = "lognormal", meanlog = log(1.5), sdlog = 1),
+    gamma = list(dist = "uniform", min = bound_eps, max = 1 - bound_eps)
+  ),
+  
+  rate_state = list(
+    B = list(dist = "logit_normal", mean = 7.5, sd = 1),
+    ta = list(dist = "lognormal", meanlog = log(200), sdlog = 0.5)
+  )
+)
+
+prior_calibration <- list(n_draws = 10000, T = T_fit_end,
+                          seed = 800001)
+
+#-------------------------------------------------------------------------------
+# Fixed baseline priors
+#-------------------------------------------------------------------------------
+
+# Forward copula transformations:
+# internal N(0,1) scale -> physical ETAS parameter scale
+
+make_links_P0 <- function(kernel) {
+  
+  stopifnot(kernel %in% c("ou", "mse", "rate_state"))
+  
+  common <- list(
+    mu = \(x) gamma_t(x, prior_baseline$mu$shape,prior_baseline$mu$rate),
+    K = \(x) loggaus_t(x, prior_baseline$K$meanlog, prior_baseline$K$sdlog),
+    alpha = \(x) unif_t(x, prior_baseline$alpha$min, prior_baseline$alpha$max))
+  
+  if (kernel == "ou") {
+    return(c(common,list(
+      c_ = \(x) unif_t(x, prior_baseline$ou$c$min, prior_baseline$ou$c$max),
+      p = \(x) unif_t(x, prior_baseline$ou$p$min, prior_baseline$ou$p$max))))
+  }
+  
+  if (kernel == "mse") {
+    return(c(common, list(
+      d = \(x) unif_t(x, prior_baseline$mse$d$min, prior_baseline$mse$d$max),
+      rho = \(x) loggaus_t(x, prior_baseline$mse$rho$meanlog, 
+                           prior_baseline$mse$rho$sdlog),
+      gamma = \(x) unif_t(x, prior_baseline$mse$gamma$min, 
+                          prior_baseline$mse$gamma$max))))
+  }
+  
+  if (kernel == "rate_state") {
+    return(c(common, list(
+      B = \(x) logitgaus_t(x, prior_baseline$rate_state$B$mean, 
+                           prior_baseline$rate_state$B$sd),
+      ta = \(x) loggaus_t(x, prior_baseline$rate_state$ta$meanlog, 
+                          prior_baseline$rate_state$ta$sdlog))))
+  }
+}
+
+#-------------------------------------------------------------------------------
+# Inverse copula transformations:
+# physical ETAS parameter scale -> internal N(0,1) scale
+#-------------------------------------------------------------------------------
+
+make_inverse_links_P0 <- function(kernel) {
+  
+  stopifnot(kernel %in% c("ou", "mse", "rate_state"))
+  
+  common <- list(
+    mu = \(x) inv_gamma_t(x, prior_baseline$mu$shape, prior_baseline$mu$rate),
+    
+    K = \(x) inv_loggaus_t(x, prior_baseline$K$meanlog, prior_baseline$K$sdlog),
+    
+    alpha = \(x) inv_unif_t(x, prior_baseline$alpha$min, prior_baseline$alpha$max))
+  
+  
+  if (kernel == "ou") {
+    return(c(common, list(
+      c_ = \(x) inv_unif_t(x,  prior_baseline$ou$c$min, prior_baseline$ou$c$max),
+      p = \(x) inv_unif_t(x, prior_baseline$ou$p$min, prior_baseline$ou$p$max))))
+  }
+  
+  
+  if (kernel == "mse") {
+    return(c(common, list( 
+      d = \(x) inv_unif_t(x,  prior_baseline$mse$d$min, prior_baseline$mse$d$max),
+      rho = \(x) inv_loggaus_t(x, prior_baseline$mse$rho$meanlog,
+                               prior_baseline$mse$rho$sdlog),
+      gamma = \(x) inv_unif_t(x, prior_baseline$mse$gamma$min, 
+                              prior_baseline$mse$gamma$max))))
+  }
+  
+  if (kernel == "rate_state") { 
+    return(c(common, list(
+      B = \(x) inv_logitgaus_t(x, prior_baseline$rate_state$B$mean,
+                               prior_baseline$rate_state$B$sd),
+      ta = \(x) inv_loggaus_t(x, prior_baseline$rate_state$ta$meanlog,
+                              prior_baseline$rate_state$ta$sdlog))))
+  }
+}
+
+#-------------------------------------------------------------------------------
+# inlabru fitting options under baseline priors
+#-------------------------------------------------------------------------------
+
+make_bru_options_P0 <- function(kernel, rel_tol = 0.1, max_iter = 100) {
+  
+  stopifnot(kernel %in% c("ou", "mse", "rate_state"))
+  
+  inv <- make_inverse_links_P0(kernel)
+  init <- initials[[kernel]]
+  
+  if (kernel == "ou") {
+    th_init <- list(
+      th.mu = inv$mu(init["mu"]),
+      th.K = inv$K(init["K"]),
+      th.alpha = inv$alpha(init["alpha"]),
+      th.c = inv$c_(init["c"]),
+      th.p = inv$p(init["p"]))
+  }
+  
+  if (kernel == "mse") {
+    th_init <- list(
+      th.mu = inv$mu(init["mu"]),
+      th.K = inv$K(init["K"]),
+      th.alpha = inv$alpha(init["alpha"]),
+      th.d = inv$d(init["d"]),
+      th.rho = inv$rho(init["rho"]),
+      th.gamma = inv$gamma(init["gamma"]))
+  }
+  
+  if (kernel == "rate_state") {
+    th_init <- list(
+      th.mu = inv$mu(init["mu"]),
+      th.K = inv$K(init["K"]),
+      th.alpha = inv$alpha(init["alpha"]),
+      th.B = inv$B(init["B"]),
+      th.ta = inv$ta(init["ta"]))
+  }
+  
+  list(bru_verbose = 0, bru_max_iter = max_iter,bru_rel_tol = rel_tol,
+       bru_initial = th_init)
+}
+
+#-------------------------------------------------------------------------------
+# Temporal binning
+#-------------------------------------------------------------------------------
+
+temporal_binning <- list(coef.t = 1, delta.t = 0.1, N.max = 14)
+
 #-------------------------------------------------------------------------------
 # Pilot seeds
 #-------------------------------------------------------------------------------
@@ -224,11 +378,9 @@ catalogue_dir <- here::here("results", "simulation", "catalogues")
 figure_dir <- here::here("results", "simulation", "figures")
 table_dir <- here::here("results", "simulation", "tables")
 fit_dir <- here::here("results", "simulation", "fits")
-forecast_fit_dir <- here::here("results", "simulation", "forecast_fits")
 
 dir.create(pilot_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(catalogue_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(table_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(fit_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(forecast_fit_dir, recursive = TRUE, showWarnings = FALSE)

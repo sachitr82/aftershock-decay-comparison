@@ -725,17 +725,17 @@ scale_fill_viridis_c(option = "inferno", trans = "log10", name = "Count") +
        x = "Longitude", y = "Latitude")
 ```
 
-The `ETAS.inlabru` method supports rectangular regions only. Zooming in and increasing the resolution of the hex map, we overlay three candidate spatial windows. The red window, used by @bayliss2020data has corners $[35^\circ N, -118^\circ E], [37^\circ N, -117^\circ E]$. This paper was interested in characterising the background seismicity on a declustered Ridgecrest catalogue, and was therefore able to consider a more conservative region. The dark blue window, used by @vanderelst2021bpositive, has corners $[35.2^\circ N, -118.2^\circ E], [36.4^\circ N, -117^\circ E]$. We extend this box further north (up to $36.6^\circ N$) for the green window, which includes further events that seem Ridgecrest-related.
+The `ETAS.inlabru` method supports rectangular regions only. Zooming in and increasing the resolution of the hex map, we overlay three candidate spatial windows. The red window, used by @bayliss2020data has corners $[35^\circ N, -118^\circ E], [37^\circ N, -117^\circ E]$. This paper was interested in characterising the background seismicity on a declustered Ridgecrest catalogue, and was therefore able to consider a more conservative region. The green window, used by @vanderelst2021bpositive, has corners $[35.2^\circ N, -118.2^\circ E], [36.4^\circ N, -117^\circ E]$ and excludes the sequence stemming from the 2020 M5.8 Lone Pine event ($[36.44683^\circ N, -117.9752^\circ E]$ ), which @Hauksson2021LonePine showed to not be an aftershock of the Ridgecrest mainshock. We adopt this green window for this study.
 
 ```{r spatial-window}
 # Candidate spatial windows for Ridgecrest aftershock zone
 # Data frame for windows
 box_data <- data.frame(
-  xmin = c(-118, -118.2, -118.2),
-  xmax = c(-117, -117, -117),
-  ymin = c(35, 35.2, 35.2),
-  ymax = c(37, 36.4, 36.6),
-  window = c("Bayliss et al. (2020)", "van der Elst (2021)", "Proposed window") 
+  xmin = c(-118, -118.2),
+  xmax = c(-117, -117),
+  ymin = c(35, 35.2),
+  ymax = c(37, 36.4),
+  window = c("Bayliss et al. (2020)", "van der Elst (2021)") 
 )
 
 box_data$window <- factor(box_data$window, levels = c(
@@ -745,11 +745,12 @@ box_data$window <- factor(box_data$window, levels = c(
 ))
 
 # Plot
+
 cat %>%
   filter(datetime > mainshock_time) %>%
   ggplot(aes(lon, lat)) +
   base_map +
-  geom_hex(bins = 2000) +                             
+  geom_hex(bins = 10000) +                             
   geom_point(data = events, aes(lon, lat, shape = type),
              size = 3, colour = "cyan", stroke = 1.2) +
   geom_rect(data = box_data, 
@@ -757,8 +758,7 @@ cat %>%
             inherit.aes = FALSE, fill = NA, linewidth = 0.5) +
   scale_colour_manual(
     name = "Windows",
-    values = c("Bayliss et al. (2020)" = "red", "van der Elst (2021)" = "darkblue",
-               "Proposed window" = "forestgreen")
+    values = c("Bayliss et al. (2020)" = "red", "van der Elst (2021)" = "forestgreen")
   ) +
   scale_shape_manual(values = c(Mainshock = 8, Foreshock = 5), name = "Key") +
   scale_fill_viridis_c(option = "inferno", trans = "log10", name = "Count") +
@@ -768,83 +768,35 @@ cat %>%
        x = "Longitude", y = "Latitude")
 ```
 
-By extending this window further north, we observe spatial continuity of the additional events with the rest of the aftershock structure
+We also observe a somewhat separated cluster in the southwestern corner of the van der Elst window. However, its temporal distribution suggests that this does not constitute a persistent source of separate seismicity during the observation period. Considering event of magnitude $M \geq 2$ in this southwestern subregion, $59$ events occur within the first year following the Ridgecrest mainshock, with a distinct increase in activity more than five years after the mainshock. As such, we retain these observations, but consider them when selecting the temporal window.
 
-```{r}
-north_events <- cat %>%
-  filter(datetime > mainshock_time, lat > 36.4, lat <= 36.6, lon >= -118.2,
-         lon <= -117) %>%
-  mutate(days_after_mainshock = as.numeric(
-    difftime(datetime, mainshock_time, units = "days")),
-    period = case_when(days_after_mainshock <= 365 ~ "0–1 year",
-                       days_after_mainshock <= 3*365 ~ "1–3 years",
-                       TRUE ~ ">3 years"))
+```{r southwest-box}
+south_box <- cat %>%
+  filter(mag >= 2, lon > -118, lon < -117.7, lat > 35.1, lat < 35.4,
+         datetime > mainshock_time) %>%
+  mutate(t_days = as.numeric(difftime(datetime, mainshock_time, units = "days")))
 
-ggplot() +
-base_map +
-geom_point(data = cat %>%
-  filter(datetime > mainshock_time,lon >= -118.2, lon <= -117, 
-         lat >= 35.2, lat <= 36.6), aes(lon, lat),colour = "grey80",size = 0.3)+
-geom_point(data = north_events, aes(lon, lat, colour = period), size = 0.8,
-           alpha = 0.7) +
-  geom_hline(yintercept = 36.4, linetype = "dashed") +
-  coord_quickmap(xlim = c(-118.2, -117), ylim = c(35.2, 36.6)) +
-  labs(x = "Longitude", y = "Latitude", colour = "Time after mainshock")
-```
-
-We briefly assess whether these decisions are being driven by lower magnitude events which we are unlikely to consider when modelling by considering the map of $\geq M2.5$ events. We find this isn't the case.
-
-```{r}
-cat %>%
-  filter(datetime > mainshock_time, mag >= 3) %>%
-  ggplot(aes(lon, lat)) +
-  base_map +
-  geom_hex(bins = 1000) +                             
-  geom_point(data = events, aes(lon, lat, shape = type),
-             size = 3, colour = "cyan", stroke = 1.2) +
-  geom_rect(data = box_data, 
-            aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, colour = window),
-            inherit.aes = FALSE, fill = NA, linewidth = 0.5) +
-  scale_colour_manual(
-    name = "Windows",
-    values = c("Bayliss et al. (2020)" = "red", "van der Elst (2021)" = "darkblue",
-               "Proposed window" = "forestgreen")
-  ) +
-  scale_shape_manual(values = c(Mainshock = 8, Foreshock = 5), name = "Key") +
-  scale_fill_viridis_c(option = "inferno", trans = "log10", name = "Count") +
-  coord_quickmap(xlim = c(mainshock_lon - 1.5, mainshock_lon + 1.5), 
-                 ylim = c(mainshock_lat - 1.5, mainshock_lat + 1.5)) +
-  labs(title = "Aftershock density (log colour scale)",
-       x = "Longitude", y = "Latitude")
-
-north_events <- cat %>%
-  filter(datetime > mainshock_time, lat > 36.4, lat <= 36.6, lon >= -118.2,
-         lon <= -117, mag >= 2.5) %>%
-  mutate(days_after_mainshock = as.numeric(
-    difftime(datetime, mainshock_time, units = "days")),
-    period = case_when(days_after_mainshock <= 365 ~ "0–1 year",
-                       days_after_mainshock <= 3*365 ~ "1–3 years",
-                       TRUE ~ ">3 years"))
-
-ggplot() +
-base_map +
-geom_point(data = cat %>%
-  filter(datetime > mainshock_time,lon >= -118.2, lon <= -117, 
-         lat >= 35.2, lat <= 36.6, mag >= 2.5), 
-  aes(lon, lat), colour = "grey80",size = 0.3) +
-geom_point(data = north_events, aes(lon, lat, colour = period), size = 0.8,
-           alpha = 0.7) +
-  geom_hline(yintercept = 36.4, linetype = "dashed") +
-  coord_quickmap(xlim = c(-118.2, -117), ylim = c(35.2, 36.6)) +
-  labs(x = "Longitude", y = "Latitude", colour = "Time after mainshock")
+south_box %>%
+  summarise(n_total = n(), n_915 = sum(t_days < 915), 
+             n_after_915 = sum(t_days >= 915))
+south_box%>%arrange(datetime)
+south_box %>%
+  mutate(
+    period = case_when(
+      t_days < 365.25 ~ "0-1 yr",
+      t_days < 730.5  ~ "1-2 yr",
+      t_days < 915    ~ "2-2.5 yr",
+      t_days < 5*365.25 ~ "2.5-5 yr",
+      TRUE ~ ">5 yr")) %>%
+  count(period)
 ```
 
 ```{r filter-spatial}
 # Restrict spatial window, assists in determining temporal window
-cat_spatial <- cat%>%filter(lon >= -118.2, lon <= -117, lat >= 35.2, lat <= 36.6)
+cat_spatial <- cat%>%filter(lon >= -118.2, lon <= -117, lat >= 35.2, lat <= 36.4)
 ```
 
-## Magnitude of completeness
+## Magnitude of completeness and determining magnitude cut-off
 
 Before examining the temporal evolution of the sequence, catalogue completeness must first be characterised and the magnitude cut off ($M_0$) selected. This ordering is important because estimates of seismicity rate, including comparisons between post-mainshock and background activity depend directly on the magnitude range included in the catalogue. The magnitude of completeness $M_c$ denotes the approximate threshold above which earthquakes are considered reliably detected, whereas $M_0$ is the lower magnitude threshold adopted in the ETAS analysis. Here, $M_0$ is chosen sufficiently conservatively relative to the estimated completeness behaviour to reduce the influence of incompletetly observed events.
 
@@ -1041,9 +993,9 @@ gr_data(july13$mag)%>%
   )
 ```
 
-This motivates exploration of time-varying magnitude of completeness. This has been implemented in frequentist frameworks \citep{Helmstetter2006} and more recently in Bayesian ETAS models via rate-dependent incompleteness corrections \citep{Kamranzad2025}. However, the latter approach lacks publicly-available documentation for the inlabru implementation and introduces methodological complexity beyond the scope of this work. We therefore adopt a fixed $M_0$ threshold, acknowledging this as consideration for future refinement.
+This motivates exploration of time-varying magnitude of completeness. This has been implemented in frequentist frameworks @Helmstetter2006 and more recently in Bayesian ETAS models via rate-dependent incompleteness corrections @Kamranzad2025. However, the latter approach lacks publicly-available documentation for the inlabru implementation and introduces methodological complexity beyond the scope of this work. We therefore adopt a fixed $M_0$ threshold, acknowledging this as consideration for future refinement.
 
-The above methods validate $M_0 = 2.5$: while $M_0 = 2.0$ seems attractive (being the peak daily value MAXC estimate of completeness), we recall that MAXC is a conservative estimate. This is further validated through peak daily MBS estimate of $M_c = 3.3$. We pick $2.5$ as the middle ground between both estimates - going any higher risks a significant reduction in available data to fit the model, while going any lower risks introduction of bias into posteriors (in particular misfitting of decay laws -- overestimation of $p$ for Omori--Utsu, underestimation of aftershock productivity of strong earthquakes, overestimation of $c$) due to STAI @hainzl2022, @kagan2004short.
+The above methods validate $M_0 = 2.5$: while $M_0 = 2.0$ seems attractive (being the peak daily value MAXC estimate of completeness), we recall that MAXC is a conservative estimate. This is further validated through peak daily MBS estimate of $M_c = 3.3$. We pick $2.5$ as the middle ground between both estimates - going any higher risks a significant reduction in available data to fit the model, while going any lower risks introduction of bias into posteriors (in particular misfitting of decay laws -- overestimation of $p$ for Omori--Utsu, underestimation of aftershock productivity of strong earthquakes, overestimation of $c$) due to STAI @hainzl2022, @kagan2004short. This magnitude threshold is consistent with similar analyses conducted for the Ridgecrest sequence @bayliss2020data.
 
 ```{r mc-counts}
 # Number of available events at each magnitude cutoff
@@ -1056,17 +1008,17 @@ for (m in c(1, 1.5, 2, 2.5, 3, 3.3)) {
 
 Having fixed the spatial domain and adopted $M_0 = 2.5$, the temporal evolution of seismicity can now be examined on a consistent event population. All subsequent background-and post-mainshock rate calculations therefore include only earthquakes with $M \geq 2.5$.
 
-We plot cumulative events over time to provide an initial assessment of the temporal evolution of seismicity, including: - When the quiescent period begins prior to the foreshock - The duration over which elevated seismicity can reasonably be attributed to the mainshock.
+Event rates are calculared over trailing 90-day windows and evaluated at quarterly intervals. For reference, the mean seismicity rate prior to the $M6.4$ foreshock is approximately 0.074 events/day.The post-mainshock rate declines rapidly from its initially elevated level and, by approximately late 2021, has fallen to around $0.1 - 0.2$ events/day. It subsequently fluctuates around this lower range rather than converging monotonically towards the pre-sequence rate. One interval in early 2024 falls below the estimated pre-sequence rate, while seismicity increases again during 2025, reaching approximately 0.20 events/day.
+
+These observations do not identify a unique empirical endpoint for the fitting period. The aim of this project is to compare alternative temporal triggering kernels over the range of lags observed in the catalogue. Because the triggering contribution of each candidate kernel decays asymptotically towards zero, late-time observations remain potentially informative about differences in tail behaviour. Restricting the analysis to the period of clearly eleveated seismicity would therefore discard information that may contribute to distinguishing the kernels
 
 The former is relatively trivial, whereas defining the latter involves more work. @hainzl2016 defines the apparent aftershock duration as the time required for the aftershock rate to decay to the background seismicity rate. Here, background seismicity is estimated from the average seismicity rate observed prior to the $M6.4$ foreshock (@shiratori1925sagami, as reviewed by @utsu1995), yielding a rate of $0.075$ events/day.
 
 We first plot a cumulative event count to illustrate the evolution of the sequence (note this approach does not account for temporal variations in catalogue completeness and considers the previously derived whole-catalogue $M_c$). To assess the transition towards background-like activity, daily event rate are calculated and smoothed using a trailing 90-day rolling mean evaluated at quarterly intervals. Rather than defining sequence termination solely as the first point at which the rate reaches the background level, we identify the point at which seismicity has approached and stabilised near the background rate while avoiding potential contamination from later independent seismic sequences.
 
-Based on this assessment, seismicity has largely stabilised at $\sim 0.1-0.2$ events/day by October 2021, staying around that level until the end of the available data, with the exception of the 3 months preceding 06/04/2024, whose mean daily seismicity drops below the estimated pre-sequence background rate. More generally, seismicity does not show a sustained return to the background level, indicating persistent excess activity throughout the available observation period and leaving no clear empirical endpoint to the sequence.
+Therefore, the full available post-mainshock cataogue is retained unless there is evidence that later observations are no longer compatible with the assumptions of the analysis. Potential reasons for truncation would include deterioration in magnitude completeness, or a substantial change in the spatial distribution of the events. The former is not evidenced in this catalogue.
 
-Therefore, we adopt a post-mainshock fitting duration of approximately 2.5 years. This choice is consistent with empirical timescales previously used to characterise major Southern Californian aftershock sequences: Gardner and Knopoff [@gardner1974sequence] assign an aftershock window of approximately 915 days ($\approx 2.5$ years) to an $M7.0$ earthquake. This interval is sufficiently long to expose the candidate temporal kernels to triggering lags of order $10^3$ days, where their tail behaviour becomes increasingly distinct, while leaving subsequent observations for out-of-sample forecasting evaluation.
-
-Additionally, we consider a two-year forecast horizon following the fitting period, to assess whether the long-term behaviour inferred by the competing temporal kernels generalised beyond the fitting interval. This leaves $104$ earthquakes above $M_0 = 2.5$, providing a substantial out-of-sample point-process sequence. The horizon was not extended further because 2024 exhibits greater departures from the preceding stable-rate behaviour, with seismicity actually increasing from mid-2024 to the end of the catalogue.
+Although seismciity increases during 2025, exploratory spatial analysis indicates that this rise is partly associated with a localised southwestern cluseter within the predefined study region. These events are retained, since the ETAS framework permits background events to initiate new triggering cascades. Removing this population after inspection would introduce a data-dependent selection rule. Since the fitted model is temporal rather than spatiotemporal, it cannot explicitly account for the spatial separation of this late activity, a limitation to consider when interpreting the Ridgecrest model comparison.
 
 ```{r temporal-window}
 ### Identifying temporal window - evaluating rolling mean event counts quarterly
@@ -1118,16 +1070,40 @@ ggplot(checkpoint_rates, aes(date, log(mean_rate))) +
     (event/day log-scale)")
 ```
 
+# Sequence visualisation
+
 ```{r filter-temporal}
 # Restrict to chosen spatio-temporal region. Bring back events below whole
 # catalogue Mc for rigorous sequence Mc and b-value determination
 cat_ridgecrest <- extract_sequence(cat,lon_range = c(-118.2, -117),
-                                   lat_range = c(35.2, 36.6),
+                                   lat_range = c(35.2, 36.4),
                                    t_range = c(min(cat$datetime),  
-                                               as.Date("2022-01-06")))
+                                               max(cat$datetime)))
 ```
 
-# $M_0$ and $b$
+```{r spatio-temporal visualisation}
+spatial_periods <- cat_ridgecrest %>%
+  filter(mag >= 2.5)%>%
+  mutate(t_days = as.numeric(difftime(datetime, mainshock_time, units = "days")),
+         period = case_when(t_days < 365.25       ~ "0-1 yr",
+                            t_days < 3 * 365.25   ~ "1-3 yr",
+                            t_days < 5 * 365.25   ~ "3-5 yr",
+                            TRUE                  ~ ">5 yr"),
+    period = factor(period, levels = c("0-1 yr", "1-3 yr", "3-5 yr", ">5 yr")))
+
+spatial_periods %>% count(period)
+
+ggplot(spatial_periods, aes(lon, lat)) +
+geom_point(alpha = 0.45, size = 1) +
+facet_wrap(~ period, ncol = 2) +
+coord_quickmap(xlim = range(cat_ridgecrest$lon), ylim = range(cat_ridgecrest$lat))+
+labs(x = "Longitude", y = "Latitude", 
+     title = "Spatial composition of Ridgecrest-window seismicity",
+     subtitle = expression(M >= 2.5)) +
+  theme_minimal()
+```
+
+# Gutenberg-Richter $b$
 
 With $M_0 = 2.5$ and the restricted catalogue, we obtain the corresponding $b$-value from the Aki-Utsu MLE as $0.783 \pm 0.016$ on 3,336 events.
 

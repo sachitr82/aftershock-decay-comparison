@@ -51,7 +51,7 @@ for (i in seq_len(nrow(sim_index))) {
   
   catalogue_i <- generate_temporal_ETAS_synthetic(
     theta = truths[[kernel_i]], beta.p = beta_true, M0 = M0,
-    T1 = T_fit_start, T2 = T_forecast_end, Ht = mainshock_event,
+    T1 = T_fit_start, T2 = T_fit_end, Ht = mainshock_event,
     format = "df", kernel = kernel_i, Mmax = Mmax)
   
   #-----------------------------------------------------------------------------
@@ -61,7 +61,7 @@ for (i in seq_len(nrow(sim_index))) {
   stopifnot(
     is.data.frame(catalogue_i),
     all(c("ts", "magnitudes", "gen") %in% names(catalogue_i)),
-    all(catalogue_i$ts >= T_fit_start), all(catalogue_i$ts <= T_forecast_end),
+    all(catalogue_i$ts >= T_fit_start), all(catalogue_i$ts <= T_fit_end),
     all(catalogue_i$magnitudes >= M0), all(catalogue_i$magnitudes <= Mmax),
     all(diff(catalogue_i$ts) >= 0)
   )
@@ -84,8 +84,7 @@ for (i in seq_len(nrow(sim_index))) {
     design = list(
       M0 = M0, Mmax = Mmax, b = b_true, beta = beta_true,
       fit_start_date = fit_start_date, fit_end_date = fit_end_date,
-      forecast_end_date = forecast_end_date,
-      T_fit_start = T_fit_start, T_fit_end = T_fit_end, T_forecast_end = T_forecast_end,
+      T_fit_start = T_fit_start, T_fit_end = T_fit_end,
       mainshock = mainshock_event,
       n_ou_anchor = n_ou_anchor,
       G_mainshock_obs_target = G_mainshock_obs_target,
