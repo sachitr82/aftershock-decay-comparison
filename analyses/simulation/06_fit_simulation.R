@@ -189,8 +189,8 @@ fit_catalogue <- function(i) {
           catalogue_seed = catalogue_seed_i, fit_seed = fit_seed_i,
           n_fit = existing_i$n_fit, runtime_minutes = existing_i$runtime_minutes,
           converged = existing_i$converged, hit_max = existing_i$hit_max,
-          n_iter = existing_i$n_iter, status = "existing",
-          error = NA_character_, file = basename(outfile_i)
+          n_iter = existing_i$n_iter, n_cpo_fail = existing_i$n_cpo_fail,
+          status = "existing", error = NA_character_, file = basename(outfile_i)
         )
         
       } else {
@@ -224,21 +224,15 @@ fit_catalogue <- function(i) {
         n_iter_i <- max(fit_i$bru_iinla$track$iteration, na.rm = TRUE)
         
         missing_i <- setdiff(c("dic", "waic", "cpo", "mlik"), names(fit_i))
-        dic_i <- as.numeric(fit_i$dic$dic)
-        waic_i <- as.numeric(fit_i$waic$waic)
-        ml_i <- as.numeric(fit_i$mlik[1, 1])
-        cpo_i <- fit_i$cpo$cpo
+       
+        if (length(missing_i) > 0) {
+          stop("Missing requested INLA output: ", paste(missing_i, collapse = ", "))
+        }
         
         n_cpo_fail_i <- if (!is.null(fit_i$cpo$failure)) {
           sum(fit_i$cpo$failure != 0, na.rm = TRUE)
         } else {
           NA_integer_
-        }
-        
-        if (length(cpo_i) > 0 && all(is.finite(cpo_i)) && all(cpo_i > 0)) {
-          lpml_i <- sum(log(cpo_i))
-        } else {
-          lpml_i <- NA_real_
         }
         
         #-----------------------------------------------------------------------
@@ -261,7 +255,8 @@ fit_catalogue <- function(i) {
           runtime_minutes = runtime_i,
           converged = converged_i,
           hit_max = hit_max_i,
-          n_iter = n_iter_i
+          n_iter = n_iter_i,
+          n_cpo_fail = n_cpo_fail_i
         )
         
         # Temporary file prevents an interrupted save appearing as a completed fit
@@ -280,7 +275,8 @@ fit_catalogue <- function(i) {
           catalogue_seed = catalogue_seed_i, fit_seed = fit_seed_i,
           n_fit = nrow(catalogue_i), runtime_minutes = runtime_i,
           converged = converged_i, hit_max = hit_max_i, n_iter = n_iter_i,
-          status = "fitted", error = NA_character_, file = basename(outfile_i)
+          n_cpo_fail = n_cpo_fail_i, status = "fitted", error = NA_character_, 
+          file = basename(outfile_i)
         )
         
         rm(fit_i, output_i)
@@ -298,7 +294,7 @@ fit_catalogue <- function(i) {
         catalogue_seed = catalogue_seed_i, fit_seed = fit_seed_i,
         n_fit = nrow(catalogue_i), runtime_minutes = NA_real_,
         converged = FALSE, hit_max = NA, n_iter = NA_integer_,
-        status = "error", error = conditionMessage(e),
+        n_cpo_fail = NA_integer_, status = "error", error = conditionMessage(e),
         file = basename(outfile_i)
       )
     })
@@ -316,13 +312,11 @@ n_workers <- min(4, future::availableCores())
 
 message("Running ", n_fits, " fits using ", n_workers, " parallel workers.")
 
-set.seed(12345)
-
 future::plan(future::multisession, workers = n_workers)
 
 fit_rows <- future.apply::future_lapply(
   seq_len(nrow(simulation_manifest)), fit_catalogue,
-  future.seed = TRUE,
+  future.seed = 12345,
   future.packages = c("ETAS.inlabru", "inlabru", "INLA"),
   future.scheduling = 25
 )
