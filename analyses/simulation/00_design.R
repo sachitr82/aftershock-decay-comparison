@@ -345,10 +345,12 @@ make_bru_options_P0 <- function(kernel, rel_tol = 0.1, max_iter = 100) {
 }
 
 #-------------------------------------------------------------------------------
-# Temporal binning
+# Fitting numerical controls (validated in 04 and 05)
 #-------------------------------------------------------------------------------
 
 temporal_binning <- list(coef.t = 1, delta.t = 0.1, N.max = 14)
+
+fit_control <- list(rel_tol = 0.1, max_iter = 100)
 
 #-------------------------------------------------------------------------------
 # Pilot seeds

@@ -251,7 +251,7 @@ for (kernel in c("ou", "mse", "rate_state")) {
         tolerance = tolerance,
         quantity = "g(t)",
         time = t_grid,
-        median = apply(g_mat, 2, median))
+        median = apply(g_mat, 2, median)),
       
       data.frame(
         kernel = kernel,
