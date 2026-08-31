@@ -375,11 +375,13 @@ sim_index <- rbind(
 # Output directories
 #-------------------------------------------------------------------------------
 
-pilot_dir <- here::here("results", "simulation", "pilots")
-catalogue_dir <- here::here("results", "simulation", "catalogues")
-figure_dir <- here::here("results", "simulation", "figures")
-table_dir <- here::here("results", "simulation", "tables")
-fit_dir <- here::here("results", "simulation", "fits")
+simulation_outputs_dir <- here("outputs", "simulation")
+
+pilot_dir <- file.path(simulation_outputs_dir, "pilots")
+catalogue_dir <- file.path(simulation_outputs_dir, "catalogues")
+figure_dir <- file.path(simulation_outputs_dir, "figures")
+table_dir <- file.path(simulation_outputs_dir, "tables")
+fit_dir <- file.path(simulation_outputs_dir, "fits")
 
 dir.create(pilot_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(catalogue_dir, recursive = TRUE, showWarnings = FALSE)

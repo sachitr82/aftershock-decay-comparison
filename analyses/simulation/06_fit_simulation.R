@@ -6,6 +6,7 @@
 # Load packages and design
 #-------------------------------------------------------------------------------
 
+library(dplyr)
 library(ETAS.inlabru)
 library(future)
 library(future.apply)
@@ -22,8 +23,7 @@ candidate_kernels <- c("ou", "mse", "rate_state")
 
 stopifnot(temporal_binning$N.max == 14,
   fit_control$rel_tol == 0.1,
-  fit_control$max_iter == 100
-)
+  fit_control$max_iter == 100)
 
 #-------------------------------------------------------------------------------
 # Load final simulation manifest (from 03)
@@ -105,6 +105,48 @@ saveRDS(
 writeLines(capture.output(sessionInfo()), file.path(main_fit_dir, "sessionInfo.txt"))
 
 #-------------------------------------------------------------------------------
+# Fit diagnostics
+#-------------------------------------------------------------------------------
+
+fit_diagnostics <- function(fit) {
+  
+  log_i <- as.character(inlabru::bru_log(fit))
+  
+  inla_failure <- any(grepl(
+    paste(
+      "Problem in inla",
+      "Giving up and returning last successfully obtained result",
+      "inla-program exited with an error",
+      "maximum number of tries has been reached",
+      "Newton-Raphson optimizer did not converge",
+      sep = "|"), log_i))
+  
+  nan_inf_logl <- any(grepl("NAN/INF values in logl", log_i, fixed = TRUE))
+  
+  vb_aborted <- any(grepl("max_correction|vb.correction.*aborted", log_i))
+  
+  converged <- !inla_failure && any(grepl("Convergence criterion met",
+                                          log_i, fixed = TRUE))
+  
+  hit_max <- !inla_failure && any(grepl("Maximum iterations reached", log_i, 
+                                        fixed = TRUE))
+  
+  fit_status <- dplyr::case_when(
+    inla_failure ~ "inla_failure", converged ~ "converged",
+    hit_max ~ "hit_max", TRUE ~ "unknown")
+  
+  n_iter <- max(fit$bru_iinla$track$iteration, na.rm = TRUE)
+  
+  list(
+    fit_status = fit_status,
+    converged = converged,
+    hit_max = hit_max,
+    inla_failure = inla_failure,
+    nan_inf_logl = nan_inf_logl,
+    vb_aborted = vb_aborted,
+    n_iter = n_iter)
+}
+#-------------------------------------------------------------------------------
 # Fit all three candidate kernels to one catalogue
 #-------------------------------------------------------------------------------
 
@@ -181,17 +223,28 @@ fit_catalogue <- function(i) {
           isTRUE(all.equal(existing_i$rel_tol, fit_control$rel_tol)),
           existing_i$max_iter == fit_control$max_iter
         )
-        
+        diag_i <- fit_diagnostics(existing_i$fit)
         message("Already exists: ", basename(outfile_i), " — skipping fit")
         
         row_i <- data.frame(
-          truth_kernel = truth_i, fitted_kernel = fitted_i, rep = rep_i,
-          catalogue_seed = catalogue_seed_i, fit_seed = fit_seed_i,
-          n_fit = existing_i$n_fit, runtime_minutes = existing_i$runtime_minutes,
-          converged = existing_i$converged, hit_max = existing_i$hit_max,
-          n_iter = existing_i$n_iter, n_cpo_fail = existing_i$n_cpo_fail,
-          status = "existing", error = NA_character_, file = basename(outfile_i)
-        )
+          truth_kernel = truth_i, 
+          fitted_kernel = fitted_i, 
+          rep = rep_i,
+          catalogue_seed = catalogue_seed_i, 
+          fit_seed = fit_seed_i,
+          n_fit = existing_i$n_fit, 
+          runtime_minutes = existing_i$runtime_minutes,
+          fit_status = diag_i$fit_status,
+          converged = diag_i$converged,
+          hit_max = diag_i$hit_max,
+          inla_failure = diag_i$inla_failure,
+          nan_inf_logl = diag_i$nan_inf_logl,
+          vb_aborted = diag_i$vb_aborted,
+          n_iter = diag_i$n_iter,
+          n_cpo_fail = existing_i$n_cpo_fail,
+          status = "existing",
+          error = NA_character_,
+          file = basename(outfile_i))
         
       } else {
         
@@ -218,10 +271,30 @@ fit_catalogue <- function(i) {
         
         runtime_i <- as.numeric(difftime(Sys.time(), start_i, units = "mins"))
         
-        log_i <- as.character(inlabru::bru_log(fit_i))
-        converged_i <- any(grepl("Convergence criterion met", log_i, fixed = TRUE))
-        hit_max_i <- any(grepl("Maximum iterations reached", log_i, fixed = TRUE))
-        n_iter_i <- max(fit_i$bru_iinla$track$iteration, na.rm = TRUE)
+        diag_i <- fit_diagnostics(fit_i)
+        
+        fit_status_i <- diag_i$fit_status
+        converged_i <- diag_i$converged
+        hit_max_i <- diag_i$hit_max
+        inla_failed_i <- diag_i$inla_failure
+        nan_inf_i <- diag_i$nan_inf_logl
+        vb_aborted_i <- diag_i$vb_aborted
+        n_iter_i <- diag_i$n_iter
+        
+        if (inla_failed_i) {
+          
+          failure_lines <- as.character(inlabru::bru_log(fit_i))
+          failure_lines <- failure_lines[grepl(
+            paste(
+              "Problem in inla",
+              "Giving up and returning last successfully obtained result",
+              "inla-program exited with an error",
+              "maximum number of tries has been reached",
+              "Newton-Raphson optimizer did not converge",
+              sep = "|" ), failure_lines)]
+          
+          stop( "Internal INLA failure:\n", paste(failure_lines, collapse = "\n"))
+        }
         
         missing_i <- setdiff(c("dic", "waic", "cpo", "mlik"), names(fit_i))
        
@@ -253,8 +326,12 @@ fit_catalogue <- function(i) {
           rel_tol = fit_control$rel_tol,
           max_iter = fit_control$max_iter,
           runtime_minutes = runtime_i,
+          fit_status = fit_status_i,
           converged = converged_i,
           hit_max = hit_max_i,
+          inla_failure = inla_failed_i,
+          nan_inf_logl = nan_inf_i,
+          vb_aborted = vb_aborted_i,
           n_iter = n_iter_i,
           n_cpo_fail = n_cpo_fail_i
         )
@@ -273,12 +350,13 @@ fit_catalogue <- function(i) {
         row_i <- data.frame(
           truth_kernel = truth_i, fitted_kernel = fitted_i, rep = rep_i,
           catalogue_seed = catalogue_seed_i, fit_seed = fit_seed_i,
-          n_fit = nrow(catalogue_i), runtime_minutes = runtime_i,
-          converged = converged_i, hit_max = hit_max_i, n_iter = n_iter_i,
+          n_fit = nrow(catalogue_i), runtime_minutes = runtime_i, 
+          fit_status = fit_status_i, converged = converged_i, hit_max = hit_max_i, 
+          inla_failure = inla_failed_i, nan_inf_logl = nan_inf_i,
+          vb_aborted = vb_aborted_i, n_iter = n_iter_i,
           n_cpo_fail = n_cpo_fail_i, status = "fitted", error = NA_character_, 
-          file = basename(outfile_i)
-        )
-        
+          file = basename(outfile_i))
+
         rm(fit_i, output_i)
       }
       
@@ -289,14 +367,29 @@ fit_catalogue <- function(i) {
       
       gc(verbose = FALSE)
       
+      error_i <- conditionMessage(e)
+      inla_failure_i <- grepl("^Internal INLA failure:", error_i)
+      
       data.frame(
-        truth_kernel = truth_i, fitted_kernel = fitted_i, rep = rep_i,
-        catalogue_seed = catalogue_seed_i, fit_seed = fit_seed_i,
-        n_fit = nrow(catalogue_i), runtime_minutes = NA_real_,
-        converged = FALSE, hit_max = NA, n_iter = NA_integer_,
-        n_cpo_fail = NA_integer_, status = "error", error = conditionMessage(e),
-        file = basename(outfile_i)
-      )
+        truth_kernel = truth_i,
+        fitted_kernel = fitted_i,
+        rep = rep_i,
+        catalogue_seed = catalogue_seed_i,
+        fit_seed = fit_seed_i,
+        n_fit = nrow(catalogue_i),
+        runtime_minutes = NA_real_,
+        fit_status = dplyr::case_when(inla_failure_i ~ "inla_failure", 
+                                      TRUE ~ "error"),
+        converged = FALSE,
+        hit_max = NA,
+        inla_failure = inla_failure_i,
+        nan_inf_logl = NA,
+        vb_aborted = NA,
+        n_iter = NA_integer_,
+        n_cpo_fail = NA_integer_,
+        status = "error",
+        error = error_i,
+        file = basename(outfile_i))
     })
   }
   
@@ -343,8 +436,8 @@ write.csv(fit_manifest, file.path(main_fit_dir, "fit_manifest.csv"), row.names =
 
 problem_fits <- fit_manifest[
   fit_manifest$status == "error" |
-    !fit_manifest$converged |
-    fit_manifest$hit_max %in% TRUE, ]
+    fit_manifest$fit_status %in% c("hit_max", "inla_failure", "unknown"),
+]
 
 write.csv(problem_fits, file.path(main_fit_dir, "problem_fits.csv"), row.names = FALSE)
 
@@ -357,8 +450,7 @@ print(table(fit_manifest$converged, useNA = "ifany"))
 
 stopifnot(
   nrow(fit_manifest) == n_fits,
-  !anyDuplicated(fit_manifest[, c("truth_kernel", "rep", "fitted_kernel")])
-)
+  !anyDuplicated(fit_manifest[, c("truth_kernel", "rep", "fitted_kernel")]))
 message("Fits with CPO failures: ", sum(fit_manifest$n_cpo_fail > 0, na.rm = TRUE))
 
 message("Finished main simulation fitting: ",

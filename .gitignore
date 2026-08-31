@@ -4,3 +4,9 @@
 .RData
 .Rproj.user
 .Ruserdata
+
+# Large production fit objects
+outputs/simulation/fits/main_simulation/truth_ou/*.rds
+outputs/simulation/fits/main_simulation/truth_mse/*.rds
+outputs/simulation/fits/main_simulation/truth_rate_state/*.rds
+.RDataTmp

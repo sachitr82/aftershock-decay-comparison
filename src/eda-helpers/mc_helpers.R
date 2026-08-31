@@ -1,6 +1,40 @@
 # Gutenberg-Richter b-value estimators and completeness (Mc) tools.
 # All magnitudes are assumed binned to width `dm` (default 0.1).
 
+#' Frequency-magnitude (Gutenberg-Richter) counts
+#'
+#' Bins magnitudes and returns the incremental (per-bin) and cumulative
+#' (\eqn{N \ge M}) counts used for GR / frequency-magnitude plots.
+#'
+#' @param mags Numeric vector of magnitudes.
+#' @param dm Magnitude bin width (default 0.1).
+#' @return A data frame with columns `mag` (bin centre), `incremental` (count
+#'   in bin) and `cumulative` (count of events with magnitude >= `mag`).
+#' @export
+gr_data <- function(mags, dm = 0.1) {
+  mags <- mags[is.finite(mags)]
+  brks <- seq(floor(min(mags) / dm) * dm - dm / 2, max(mags) + dm, by = dm)
+  h <- hist(mags, breaks = brks, plot = FALSE)
+  data.frame(mag = h$mids,
+             incremental = h$counts,
+             cumulative  = rev(cumsum(rev(h$counts))))
+}
+
+#' Maximum-curvature estimate of the completeness magnitude (Mc)
+#'
+#' Maximum-curvature (MAXC) method: the modal bin of the non-cumulative
+#' frequency-magnitude distribution.
+#'
+#' @param mags Numeric vector of magnitudes.
+#' @param dm Magnitude bin width (default 0.1).
+#' @return The estimated magnitude of completeness (numeric scalar).
+#' @seealso [gr_data()]
+#' @export
+estimate_mc_maxc <- function(mags, dm = 0.1) {
+  g <- gr_data(mags, dm)
+  g$mag[which.max(g$incremental)]
+}
+
 #' Aki-Utsu maximum-likelihood b-value (binning-corrected)
 #'
 #' Maximum-likelihood Gutenberg-Richter b-value above a completeness magnitude
@@ -52,7 +86,7 @@ b_stability <- function(mags, mc_range = NULL, dm = 0.1, correction = dm / 2) {
   }))
 }
 
-#' #' Mc by b-value stability (Woessner & Wiemer 2005 criterion)
+#' sMc by b-value stability (Woessner & Wiemer 2005 criterion)
 #'
 #' Returns the lowest cut-off at which the local b-value agrees with the mean of
 #' the b-values over the next half-magnitude window (`dM`), to within its Shi &

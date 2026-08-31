@@ -10,7 +10,7 @@ library(ETAS.inlabru)
 library(here)
 library(ggplot2)
 
-source(here::here("analyses", "simulation", "00_design.R"))
+source(here("analyses", "simulation", "00_design.R"))
 
 #-------------------------------------------------------------------------------
 # Fixed prior-calibration seed and observation window
@@ -118,16 +118,6 @@ prior_summary <- data.frame(
 print(prior_summary)
 
 #-------------------------------------------------------------------------------
-# Create output directories
-#-------------------------------------------------------------------------------
-
-table_dir <- here::here("results", "simulation", "tables")
-fig_dir <- here::here("results", "simulation", "figures")
-
-dir.create(table_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
-
-#-------------------------------------------------------------------------------
 # Save prior summary table
 #-------------------------------------------------------------------------------
 
@@ -203,7 +193,7 @@ plots <- list(
   rate_state = plot_prior_draws(h_plot$rate_state, "Rate-state baseline prior")
 )
 
-figfile <- file.path(fig_dir, "baseline_prior_normalised_kernel_draws.png")
+figfile <- file.path(figure_dir, "baseline_prior_normalised_kernel_draws.png")
 
 ggsave(filename = figfile, plot = patchwork::wrap_plots(plots, ncol = 1),
        width = 9, height = 9)

@@ -1,6 +1,7 @@
 #===============================================================================
 # Check pilot catalogues and validate candidate synthetic truths
 #===============================================================================
+
 library(ETAS.inlabru)
 library(ggplot2)
 library(here)
@@ -30,10 +31,10 @@ summarise_catalogue <- function(cat, kernel) {
 #===============================================================================
 
 pilot_files <- c(
-  ou = here::here("results", "simulation", "pilots", "ou_pilot.rds"),
-  mse = here::here("results", "simulation", "pilots", "mse_pilot.rds"),
-  rate_state = here::here(
-    "results", "simulation", "pilots", "rate_state_pilot.rds"))
+  ou = file.path(pilot_dir, "ou_pilot.rds"),
+  mse = file.path(pilot_dir, "mse_pilot.rds"),
+  rate_state = file.path(pilot_dir, "rate_state_pilot.rds")
+)
 
 pilots <- lapply(pilot_files, readRDS)
 

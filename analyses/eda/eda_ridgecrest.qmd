@@ -1,7 +1,7 @@
 ---
 title: "Exploratory Data Analysis for the 2019 Ridgecrest Sequence"
 author: "Sachit Ramakrishnan"
-bibliography: 01_eda_ridgecrest.bib
+bibliography: eda_ridgecrest.bib
 format: html
 editor: visual
 ---
@@ -64,9 +64,8 @@ library(zoo)
 ################################################################################
 # Project functions (see /src) 
 ################################################################################
-source(here("src", "read_catalogue.R"))
-source(here("src", "eda_helpers.R"))
-source(here("src", "bvalue.R"))
+source(here("src", "eda-helpers", "read_catalogue.R"))
+source(here("src", "eda-helpers", "mc_helpers.R"))
 
 ################################################################################
 # Global plot theme 
@@ -339,7 +338,7 @@ ggplot(qb_month, aes(month, n, group = year)) +
        x = "Month", y = "Number of blasts")
 ```
 
-Quarry blasting shows a clear seasonal cycle - higher through summer, lower in winter - most likely driven by summer peaks in construction demand. Against the baseline, **summer 2019** stands out: blasts fell to roughly winter levels when they should have peaked, coinciding with the Ridgecrest sequence in July 2019. Two hard-to-separate mechanisms likely explain this: quarry operators near the sequence may have **paused blasting** in response to earthquakes, or the flood of aftershocks may have **overwhelmed catalogue processing** so blasts were under-detected during that window.
+Quarry blasting shows a clear seasonal cycle - higher through summer, lower in winter - most likely driven by summer peaks in construction demand. Against the baseline, **Summer 2019** stands out: blasts fell to roughly winter levels when they should have peaked, coinciding with the Ridgecrest sequence in July 2019. Two hard-to-separate mechanisms likely explain this: quarry operators near the sequence may have **paused blasting** in response to earthquakes, or the flood of aftershocks may have **overwhelmed catalogue processing** so blasts were under-detected during that window.
 
 ```{r et-hour}
 # Heatmap of event distribution across a week
@@ -725,7 +724,7 @@ scale_fill_viridis_c(option = "inferno", trans = "log10", name = "Count") +
        x = "Longitude", y = "Latitude")
 ```
 
-The `ETAS.inlabru` method supports rectangular regions only. Zooming in and increasing the resolution of the hex map, we overlay three candidate spatial windows. The red window, used by @bayliss2020data has corners $[35^\circ N, -118^\circ E], [37^\circ N, -117^\circ E]$. This paper was interested in characterising the background seismicity on a declustered Ridgecrest catalogue, and was therefore able to consider a more conservative region. The green window, used by @vanderelst2021bpositive, has corners $[35.2^\circ N, -118.2^\circ E], [36.4^\circ N, -117^\circ E]$ and excludes the sequence stemming from the 2020 M5.8 Lone Pine event ($[36.44683^\circ N, -117.9752^\circ E]$ ), which @Hauksson2021LonePine showed to not be an aftershock of the Ridgecrest mainshock. We adopt this green window for this study.
+The `ETAS.inlabru` method supports rectangular regions only. Zooming in and increasing the resolution of the hex map, we overlay two candidate spatial windows. The red window, used by @bayliss2020data has corners $[35^\circ N, -118^\circ E], [37^\circ N, -117^\circ E]$. This paper was interested in characterising the background seismicity on a declustered Ridgecrest catalogue, and was therefore able to consider a more conservative region. The green window, used by @vanderelst2021bpositive, has corners $[35.2^\circ N, -118.2^\circ E], [36.4^\circ N, -117^\circ E]$ and excludes the sequence stemming from the 2020 M5.8 Lone Pine event ($[36.44683^\circ N, -117.9752^\circ E]$ ), which @Hauksson2021LonePine showed to not be an aftershock of the Ridgecrest mainshock. We adopt this green window for this study.
 
 ```{r spatial-window}
 # Candidate spatial windows for Ridgecrest aftershock zone
@@ -750,7 +749,7 @@ cat %>%
   filter(datetime > mainshock_time) %>%
   ggplot(aes(lon, lat)) +
   base_map +
-  geom_hex(bins = 10000) +                             
+  geom_hex(bins = 2000) +                             
   geom_point(data = events, aes(lon, lat, shape = type),
              size = 3, colour = "cyan", stroke = 1.2) +
   geom_rect(data = box_data, 
@@ -766,6 +765,38 @@ cat %>%
                  ylim = c(mainshock_lat - 1.5, mainshock_lat + 1.5)) +
   labs(title = "Aftershock density (log colour scale)",
        x = "Longitude", y = "Latitude")
+```
+
+```{r report-window-plot}
+special_events <- events %>%
+  filter(type %in% c("Foreshock", "Mainshock")) %>%
+  mutate(event = case_when( 
+    type == "Foreshock" ~ "M6.4 foreshock",
+    type == "Mainshock" ~ "M7.1 mainshock")) %>%
+  select(lon, lat, event) %>%
+  bind_rows(
+    data.frame(lon = -117.9752, lat = 36.44683, event = "M5.8 Lone Pine"))
+
+p_spatial <- cat %>%
+  filter(datetime > mainshock_time) %>%
+  ggplot(aes(lon, lat)) +
+  base_map +
+  geom_point(size = 0.45, alpha = 0.25, colour = "grey25") +
+  annotate("rect", xmin = -118.2, xmax = -117, ymin = 35.2, ymax = 36.4,
+           fill = NA, colour = "black", linewidth = 0.8, linetype = "dashed") +
+  
+ geom_point(data = special_events, aes(lon, lat, shape = event, colour = event), 
+            inherit.aes = FALSE, size = 3, stroke = 1.2) +
+scale_shape_manual(values = c( "M6.4 foreshock" = 5, "M7.1 mainshock" = 8,
+                               "M5.8 Lone Pine" = 4), name = NULL) +
+scale_colour_manual(values = c("M6.4 foreshock" = "steelblue",
+                               "M7.1 mainshock" = "steelblue",
+                               "M5.8 Lone Pine" = "firebrick"), name = NULL) +
+  coord_quickmap(xlim = c(-118.5, -116.8), ylim = c(35.0, 36.7)) +
+  labs(
+    title = "Ridgecrest seismicity and adopted spatial window", x = "Longitude",
+    y = "Latitude")
+print(p_spatial)
 ```
 
 We also observe a somewhat separated cluster in the southwestern corner of the van der Elst window. However, its temporal distribution suggests that this does not constitute a persistent source of separate seismicity during the observation period. Considering event of magnitude $M \geq 2$ in this southwestern subregion, $59$ events occur within the first year following the Ridgecrest mainshock, with a distinct increase in activity more than five years after the mainshock. As such, we retain these observations, but consider them when selecting the temporal window.
@@ -856,7 +887,29 @@ ggplot(mbs$curve, aes(mc, b)) +
   )
 ```
 
-While it's tempting to determine the $M_0$ from the entire catalogue $M_c$, we must consider short-term aftershock incompleteness (STAI), where detection capability deteriorates temporarily during periods of intense seismicity..
+While it's tempting to determine the $M_0$ from the entire catalogue $M_c$, we must consider short-term aftershock incompleteness (STAI), where detection capability deteriorates temporarily during periods of intense seismicity.
+
+```{r STAI}
+p_stai <- cat_spatial %>%
+  filter(datetime >= as.POSIXct("2019-07-04", tz = "UTC"),
+         datetime <  as.POSIXct("2019-07-14", tz = "UTC")) %>%
+  ggplot(aes(datetime, mag)) +
+  geom_point(size = 0.45, alpha = 0.35, colour = "grey25") +
+  geom_vline(xintercept = foreshock_time, linetype = "dashed", colour = "steelblue") +
+  geom_vline(xintercept = mainshock_time, linetype = "dashed", colour = "firebrick") +
+  geom_hline(yintercept = 2.5, linetype = "dotted", linewidth = 0.7) +
+  annotate("text", x = foreshock_time, y = 7.2, label = "M6.4", 
+           colour = "steelblue", hjust = -0.1) +
+  annotate("text", x = mainshock_time, y = 7.2, label = "M7.1", 
+           colour = "firebrick", hjust = -0.1) +
+  annotate("text", x = as.POSIXct("2019-07-12", tz = "UTC"), y = 2.55,
+           label = expression(M[0] == 2.5), hjust = 9, vjust = -0.4) +
+  scale_x_datetime(date_breaks = "2 days", date_labels = "%d %b") +
+  labs(title = "Magnitude reporting around the Ridgecrest mainshock", x = NULL, 
+       y = "Magnitude") +
+  theme_bw()
+print(p_stai)
+```
 
 This effect is observed in the below graph of weekly $M_c$ - note the increase across all methods for $M_c$ values post fore- and mainshock: there is no single value that describes the catalogue.
 
@@ -962,16 +1015,18 @@ july13 <- cat_spatial %>%
   filter(datetime >= as.POSIXct("2019-07-13", tz = "UTC"),
          datetime < as.POSIXct("2019-07-14", tz = "UTC"))
 
-gr_data(july6$mag)%>%
-  filter(cumulative > 0, incremental > 0)%>%
+p_gr <- gr_data(july6$mag) %>%
+  filter(cumulative > 0, incremental > 0) %>%
   ggplot(aes(mag)) +
-  geom_col(aes(y = incremental),fill = "grey75", colour = "black", width = dm) +
-  geom_line(aes(y = cumulative),colour = "steelblue",linewidth = 1) +
-  scale_y_log10()+
-  labs(title = "Frequency-magnitude distribution (6/7/2019)", x = "Magnitude",
-    y = "Number of events (log scale)"
-  )
+  geom_col(aes(y = incremental), fill = "grey75", colour = "grey30", width = dm)+
+  geom_line(aes(y = cumulative), colour = "steelblue", linewidth = 0.9) +
+  scale_y_log10() +
+  labs(title = "Frequency–magnitude distribution on 6 July 2019", 
+       x = "Magnitude", y = "Number of events (log scale)") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank())
 
+print(p_gr)
 gr_data(july8$mag)%>%
   filter(cumulative > 0, incremental > 0)%>%
   ggplot(aes(mag)) +
@@ -979,8 +1034,7 @@ gr_data(july8$mag)%>%
   geom_line(aes(y = cumulative),colour = "steelblue",linewidth = 1) +
   scale_y_log10()+
   labs(title = "Frequency-magnitude distribution (8/7/2019)", x = "Magnitude",
-    y = "Number of events (log scale)"
-  )
+    y = "Number of events (log scale)")
 
 gr_data(july13$mag)%>%
   filter(cumulative > 0, incremental > 0)%>%
@@ -989,8 +1043,7 @@ gr_data(july13$mag)%>%
   geom_line(aes(y = cumulative),colour = "steelblue",linewidth = 1) +
   scale_y_log10()+
   labs(title = "Frequency-magnitude distribution (13/7/2019)", x = "Magnitude",
-    y = "Number of events (log scale)"
-  )
+    y = "Number of events (log scale)")
 ```
 
 This motivates exploration of time-varying magnitude of completeness. This has been implemented in frequentist frameworks @Helmstetter2006 and more recently in Bayesian ETAS models via rate-dependent incompleteness corrections @Kamranzad2025. However, the latter approach lacks publicly-available documentation for the inlabru implementation and introduces methodological complexity beyond the scope of this work. We therefore adopt a fixed $M_0$ threshold, acknowledging this as consideration for future refinement.
@@ -1060,30 +1113,29 @@ checkpoint_rates <- checkpoints %>%
     mean_rate = n_events / n_days) %>%
   ungroup()
 
-ggplot(checkpoint_rates, aes(date, log(mean_rate))) +
+p_rate <- ggplot(checkpoint_rates, aes(date, mean_rate)) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 2) +
-  geom_hline(yintercept = log(baseline_rate), linetype = "dashed", 
-             colour = "red") +
-  labs(title = "Post-mainshock seismicity decay", x = "Checkpoint date",
-  y = "Mean event rate over preceding 3 months \n
-    (event/day log-scale)")
+  geom_hline(yintercept = baseline_rate, linetype = "dashed", colour = "firebrick",
+             linewidth = 0.7) +
+  annotate("text", x = as.Date("2025-10-01"), y = baseline_rate, 
+           label = paste0("Pre-foreshock rate = ", round(baseline_rate, 3),
+                          " events/day"),
+    colour = "firebrick", hjust = 2.5, vjust = 1.5, size = 3.2) +
+  scale_y_log10(labels = scales::label_number(accuracy = 0.01)) +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+               expand = expansion(mult = c(0.01, 0.02))) +
+  labs(title = "Post-mainshock seismicity rate", subtitle = expression(
+    M >= 2.5 ~"; rates over preceding three months"), x = NULL, 
+    y = "Mean event rate (events/day)") +
+  theme_bw()
+print(p_rate)
 ```
 
-# Sequence visualisation
-
-```{r filter-temporal}
-# Restrict to chosen spatio-temporal region. Bring back events below whole
-# catalogue Mc for rigorous sequence Mc and b-value determination
-cat_ridgecrest <- extract_sequence(cat,lon_range = c(-118.2, -117),
-                                   lat_range = c(35.2, 36.4),
-                                   t_range = c(min(cat$datetime),  
-                                               max(cat$datetime)))
-```
+# Spatio-temporal visualisation
 
 ```{r spatio-temporal visualisation}
-spatial_periods <- cat_ridgecrest %>%
-  filter(mag >= 2.5)%>%
+spatial_periods <- cat_temporal %>%
   mutate(t_days = as.numeric(difftime(datetime, mainshock_time, units = "days")),
          period = case_when(t_days < 365.25       ~ "0-1 yr",
                             t_days < 3 * 365.25   ~ "1-3 yr",
@@ -1105,28 +1157,31 @@ labs(x = "Longitude", y = "Latitude",
 
 # Gutenberg-Richter $b$
 
-With $M_0 = 2.5$ and the restricted catalogue, we obtain the corresponding $b$-value from the Aki-Utsu MLE as $0.783 \pm 0.016$ on 3,336 events.
+With $M_0 = 2.5$ and the restricted catalogue, we obtain the corresponding $b$-value from the Aki-Utsu MLE as $0.793 \pm 0.016$ on 3,339 events.
 
 ```{r b-value}
 # Filter to observations above cutoff and compute b-value MLE for whole sequence
-cat_fit <- cat_ridgecrest %>% filter (mag >= 2.5, !is.na(mag))
-b_aki(cat_fit$mag, mc = 2.5, dm = 0.1)
+b_aki(cat_temporal$mag, mc = 2.5, dm = 0.1)
 ```
 
-```{r b-value-pre}
-# Filter to observations above cutoff and compute b-value MLE for pre-foreshock
-cat_fit_background <- cat_ridgecrest %>% filter (mag >= 2.5, 
-                                        datetime < foreshock_time, !is.na(mag))
-b_aki(cat_fit_background$mag, mc = 2.5, dm = 0.1)
-```
+# Save relevant figures for report
 
-```{r b-value-post}
-# Filter to observations above cutoff and compute b-value MLE for post-mainshock
-cat_fit_active <- cat_ridgecrest %>% filter (mag >= 2.5, 
-                                        datetime >= mainshock_time, !is.na(mag))
-b_aki(cat_fit_active$mag, mc = 2.5, dm = 0.1)
-```
+```{r save-report-figures}
+figure_dir <- here("outputs", "eda", "figures")
+dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 
+ggsave(file.path(figure_dir, "ridgecrest_spatial_window.pdf"), p_spatial, 
+       width = 7,height = 6)
+
+ggsave(file.path(figure_dir, "ridgecrest_stai_magnitude_time.pdf"), p_stai, 
+       width = 7, height = 4.5)
+
+ggsave(file.path(figure_dir, "ridgecrest_mainshock_fmd.pdf"), p_gr, 
+       width = 6.5, height = 4.5)
+
+ggsave(file.path(figure_dir, "ridgecrest_post_mainshock_rate.pdf"), p_rate, 
+       width = 7, height = 4.5)
+```
 # References
 
 ::: {#refs}

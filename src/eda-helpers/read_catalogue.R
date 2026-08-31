@@ -79,7 +79,7 @@ read_catalogue <- function(path, tz = "America/Los_Angeles",
   cat$month     <- month(cat$datetime, label = TRUE, abbr = TRUE)  # UTC
   cat$month_start <- floor_date(cat$datetime, "month")  # UTC
   cat$hour      <- hour(cat$local) # local
-  cat$wday      <- wday(cat$local, label = TRUE, abbr = FALSE, week_start = 1) #
+  cat$wday      <- wday(cat$local, label = TRUE, abbr = FALSE, week_start = 1) 
   rownames(cat) <- NULL
   cat
 }

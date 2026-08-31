@@ -9,7 +9,7 @@
 library(ETAS.inlabru)
 library(here)
 
-source(here::here("analyses", "simulation", "00_design.R"))
+source(here("analyses", "simulation", "00_design.R"))
 
 #-------------------------------------------------------------------------------
 # Sequential execution for pilot simulations

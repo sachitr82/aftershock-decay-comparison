@@ -29,18 +29,27 @@ S_ou <- function(t, c, p) (1 + t / c)^(1 - p)
 
 # Modified stretched exponential 
 ##  delta(t) = (d + t)^gamma - d^gamma, written to avoid cancellation at small t
-delta_ms <- function(t, d, gamma) d^gamma * expm1(gamma * log1p(t / d))
+delta_ms <- function(t, d, gamma) {
+  d^gamma * expm1(gamma * log1p(t / d))
+}
+
 f_ms <- function(t, d, lambda, gamma) {
   lambda * gamma * (d + t)^(gamma - 1) * exp(-lambda * delta_ms(t, d, gamma))
 }
-S_ms <- function(t, d, lambda, gamma) exp(-lambda * delta_ms(t, d, gamma))
+
+S_ms <- function(t, d, lambda, gamma) {
+  exp(-lambda * delta_ms(t, d, gamma))
+}
 
 # Rate-state 
 f_rs <- function(t, B, ta) {
   z <- exp(-t / ta)
   B * z / (-ta * log1p(-B) * (1 - B * z))
 }
-S_rs <- function(t, B, ta) log1p(-B * exp(-t / ta)) / log1p(-B)
+
+S_rs <- function(t, B, ta) {
+  log1p(-B * exp(-t / ta)) / log1p(-B)
+}
 
 #-------------------------------------------------------------------------------
 ## Parameters (Hainzl & Christophersen 2017, Figure 1)
@@ -54,7 +63,7 @@ kernel_levels <- c("Omori\u2013Utsu",
                    "Modified stretched exponential",
                    "Rate-state")
 
-t_grid <- 10^seq(-4, 4, length.out = 3000)   # time grid (days)
+t_grid <- 10^seq(-4, 4, length.out = 3000)
 
 #-------------------------------------------------------------------------------
 ## Evaluate kernels and order factor levels for legend
@@ -132,8 +141,7 @@ p_survival <- ggplot(kern, aes(t, survival, colour = kernel, linetype = kernel))
 ## Combine 
 #-------------------------------------------------------------------------------
 
-fig <- (p_density | p_survival) +
-  plot_layout(guides = "collect") &
+fig <- (p_density | p_survival) + plot_layout(guides = "collect") &
   theme(legend.position = "bottom")
 
 print(fig)
@@ -147,16 +155,11 @@ cat(sprintf("\nPercentage of triggering outstanding beyond %g days:\n", t_eval),
             kernel_levels,
             100 * c(S_ou(t_eval, par_ou$c,  par_ou$p),
                     S_ms(t_eval, par_ms$d,  par_ms$lambda, par_ms$gamma),
-                    S_rs(t_eval, par_rs$B,  par_rs$ta))),
-    sep = "")
+                    S_rs(t_eval, par_rs$B,  par_rs$ta))), sep = "")
 
 #-------------------------------------------------------------------------------
 ## Save plots
 #-------------------------------------------------------------------------------
 
-fig_src <- here("outputs", "figures")
-fig_dest <- here("reports", "source","images")
-dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
-file.copy(list.files(fig_src, pattern = "\\.pdf$", full.names = TRUE),
-          fig_dest, overwrite = TRUE)
-
+fig_src <- here("outputs", "comparison-figure")
+dir.create(fig_src, recursive = TRUE, showWarnings = FALSE)
