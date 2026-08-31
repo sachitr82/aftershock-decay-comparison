@@ -1,0 +1,10 @@
+"truth_kernel","fitted_kernel","n_converged","median_iter","q25_iter","q75_iter","p90_iter"
+"ou","ou",100,28,25,33,38
+"ou","mse",93,28,9,33,39
+"ou","rate_state",91,30,8.5,43.5,64
+"mse","ou",100,30,25,40,46.1
+"mse","mse",97,10,7,36,43.4
+"mse","rate_state",47,11,7.5,37.5,69.8
+"rate_state","ou",100,30,26,35,44.3
+"rate_state","mse",60,22.5,7,42,54.6
+"rate_state","rate_state",98,27,8,36.5,41

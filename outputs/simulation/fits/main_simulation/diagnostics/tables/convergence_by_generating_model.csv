@@ -1,0 +1,4 @@
+"truth_kernel","n_total","n_converged","convergence_rate","n_hit_max"
+"ou",300,284,0.946666666666667,16
+"mse",300,244,0.813333333333333,56
+"rate_state",300,258,0.86,42
