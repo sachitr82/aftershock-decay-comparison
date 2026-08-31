@@ -91,8 +91,13 @@ stopifnot(
 )
 
 write.csv(fit_index, file.path(main_fit_dir, "fit_index.csv"), row.names = FALSE)
-file.copy(file.path(main_fit_dir, "fit_manifest.csv"),
-          file.path(main_fit_dir, "fit_manifest_PRE_FIX.csv"))
+#-------------------------------------------------------------------------------
+# RS and MSE fits first
+#-------------------------------------------------------------------------------
+
+fit_order <- c("mse", "rate_state", "ou")
+execution_order <- order(match(simulation_manifest$kernel, c("mse", "rate_state", "ou")), simulation_manifest$rep)
+
 #-------------------------------------------------------------------------------
 # Record production settings
 #-------------------------------------------------------------------------------
@@ -162,8 +167,12 @@ fit_catalogue <- function(i) {
   stopifnot(
     obj_cat$truth_kernel == truth_i,
     obj_cat$rep == rep_i,
-    obj_cat$seed == catalogue_seed_i
-  )
+    obj_cat$seed == catalogue_seed_i,
+    isTRUE(all.equal(obj_cat$truth_parameters, truths[[truth_i]])),
+    isTRUE(all.equal(obj_cat$design$M0, M0)),
+    isTRUE(all.equal(obj_cat$design$Mmax, Mmax)),
+    isTRUE(all.equal(obj_cat$design$T_fit_start, T_fit_start)),
+    isTRUE(all.equal(obj_cat$design$T_fit_end, T_fit_end)))
   
   catalogue_i <- obj_cat$catalogue
   catalogue_i <- catalogue_i[catalogue_i$ts >= T_fit_start &
@@ -177,9 +186,9 @@ fit_catalogue <- function(i) {
   # Fit OU, MSE and rate-state
   #-----------------------------------------------------------------------------
   
-  for (k in seq_along(candidate_kernels)) {
+  for (k in seq_along(fit_order)) {
     
-    fitted_i <- candidate_kernels[k]
+    fitted_i <- fit_order[k]
     
     job_i <- fit_index[
       fit_index$truth_kernel == truth_i & 
@@ -351,7 +360,7 @@ message("Running ", n_fits, " fits using ", n_workers, " parallel workers.")
 future::plan(future::multisession, workers = n_workers)
 
 fit_rows <- future.apply::future_lapply(
-  seq_len(nrow(simulation_manifest)), fit_catalogue,
+  execution_order, fit_catalogue,
   future.seed = 12345,
   future.packages = c("ETAS.inlabru", "inlabru", "INLA"),
   future.scheduling = 25
