@@ -228,38 +228,12 @@ for (kernel in c("ou", "mse", "rate_state")) {
       rel_tol_dir,
       paste0("truth_", kernel, "_fit_", kernel, "_", tolerance, ".rds")))
     
-    samp_i <- ETAS.inlabru::post_sampling(
-      list(
-        model.fit = obj_i$fit,
-        link.functions = obj_i$link.functions,
-        kernel = kernel),
-      n.samp = n_samp)
+    temp_i <- ETAS.inlabru::posterior_temporal_summary(
+      list(model.fit = obj_i$fit, link.functions = obj_i$link.functions, kernel = kernel),
+      t.eval = t_grid, n.samp = n_samp)
     
-    g_mat <- matrix(NA_real_, nrow = n_samp, ncol = length(t_grid))
-    
-    for (s in seq_len(n_samp)) {
-      
-      g_mat[s, ] <- ETAS.inlabru::temporal_kernel(
-        dt = t_grid, theta = as.list(samp_i[s, ]),kernel = kernel)
-    }
-    
-    Kg_mat <- sweep(g_mat, 1, samp_i$K, "*")
-    
-    functional_rows[[j]] <- rbind(
-      data.frame(
-        kernel = kernel,
-        tolerance = tolerance,
-        quantity = "g(t)",
-        time = t_grid,
-        median = apply(g_mat, 2, median)),
-      
-      data.frame(
-        kernel = kernel,
-        tolerance = tolerance,
-        quantity = "K*g(t)",
-        time = t_grid,
-        median = apply(Kg_mat, 2, median))
-    )
+    functional_rows[[j]] <- temp_i$summary %>%
+      mutate(kernel = kernel, tolerance = tolerance)
     
     j <- j + 1
   }

@@ -197,7 +197,7 @@ bound_eps <- 1e-6
 prior_baseline <- list(
   mu = list(dist = "gamma", shape = 0.5, rate = 0.5),
   K = list(dist = "lognormal", meanlog = -1, sdlog = 0.5),
-  alpha = list(dist = "uniform", min = 0, max = 10),
+  alpha = list(dist = "gamma", shape = 1, rate = 0.5),
   
   ou = list(
     c = list(dist = "uniform", min = bound_eps, max = 1),
@@ -233,7 +233,7 @@ make_links_P0 <- function(kernel) {
   common <- list(
     mu = \(x) gamma_t(x, prior_baseline$mu$shape,prior_baseline$mu$rate),
     K = \(x) loggaus_t(x, prior_baseline$K$meanlog, prior_baseline$K$sdlog),
-    alpha = \(x) unif_t(x, prior_baseline$alpha$min, prior_baseline$alpha$max))
+    alpha = \(x) gamma_t(x, prior_baseline$alpha$shape, prior_baseline$alpha$rate))
   
   if (kernel == "ou") {
     return(c(common,list(
@@ -273,7 +273,7 @@ make_inverse_links_P0 <- function(kernel) {
     
     K = \(x) inv_loggaus_t(x, prior_baseline$K$meanlog, prior_baseline$K$sdlog),
     
-    alpha = \(x) inv_unif_t(x, prior_baseline$alpha$min, prior_baseline$alpha$max))
+    alpha = \(x) inv_gamma_t(x, prior_baseline$alpha$shape, prior_baseline$alpha$rate))
   
   
   if (kernel == "ou") {

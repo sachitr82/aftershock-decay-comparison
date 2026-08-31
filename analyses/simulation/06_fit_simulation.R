@@ -91,14 +91,16 @@ stopifnot(
 )
 
 write.csv(fit_index, file.path(main_fit_dir, "fit_index.csv"), row.names = FALSE)
-
+file.copy(file.path(main_fit_dir, "fit_manifest.csv"),
+          file.path(main_fit_dir, "fit_manifest_PRE_FIX.csv"))
 #-------------------------------------------------------------------------------
 # Record production settings
 #-------------------------------------------------------------------------------
 
 saveRDS(
   list(candidate_kernels = candidate_kernels, temporal_binning = temporal_binning,
-       fit_control = fit_control, fit_seed_base = fit_seed_base),
+       fit_control = fit_control, fit_seed_base = fit_seed_base,
+       initials = initials, prior_baseline = prior_baseline),
   file.path(main_fit_dir, "run_design.rds")
 )
 
@@ -215,6 +217,7 @@ fit_catalogue <- function(i) {
         
         message("Already exists: ", basename(outfile_i), " — skipping fit")
         diag_i <- fit_diagnostics(existing_i$fit)
+        min_sd_i <- min(existing_i$fit$summary.fixed$sd, na.rm = TRUE)
         
         row_i <- data.frame(
           truth_kernel = truth_i, fitted_kernel = fitted_i, rep = rep_i,
@@ -223,7 +226,7 @@ fit_catalogue <- function(i) {
           fit_status = diag_i$fit_status, converged = diag_i$converged,
           hit_max = diag_i$hit_max, inla_failure = diag_i$inla_failure,
           nan_inf_logl = diag_i$nan_inf_logl, vb_aborted = diag_i$vb_aborted,
-          n_iter = diag_i$n_iter, n_cpo_fail = existing_i$n_cpo_fail,
+          n_iter = diag_i$n_iter, min_sd = min_sd_i, degenerate = isTRUE(min_sd_i < 1e-6),
           status = "existing", error = NA_character_, file = basename(outfile_i))
         
       } else {
@@ -237,8 +240,8 @@ fit_catalogue <- function(i) {
         link_i <- make_links_P0(fitted_i)
         bru_i <- make_bru_options_P0(fitted_i, rel_tol = fit_control$rel_tol,
                                      max_iter = fit_control$max_iter)
-        bru_i$control.compute <- list(config = TRUE, dic = TRUE, waic = TRUE,
-                                      cpo = TRUE, mlik = TRUE)
+        bru_i$control.compute <- list(config = TRUE, dic = TRUE, waic = TRUE
+                                      , mlik = TRUE)
         
         start_i <- Sys.time()
         
@@ -260,17 +263,12 @@ fit_catalogue <- function(i) {
         nan_inf_i <- diag_i$nan_inf_logl
         vb_aborted_i <- diag_i$vb_aborted
         n_iter_i <- diag_i$n_iter
+        min_sd_i <- min(fit_i$summary.fixed$sd, na.rm = TRUE)
         
-        missing_i <- setdiff(c("dic", "waic", "cpo", "mlik"), names(fit_i))
+        missing_i <- setdiff(c("dic", "waic", "mlik"), names(fit_i))
         
         if (length(missing_i) > 0) {
           stop("Missing requested INLA output: ", paste(missing_i, collapse = ", "))
-        }
-        
-        n_cpo_fail_i <- if (!is.null(fit_i$cpo$failure)) {
-          sum(fit_i$cpo$failure != 0, na.rm = TRUE)
-        } else {
-          NA_integer_
         }
         
         #-----------------------------------------------------------------------
@@ -287,8 +285,7 @@ fit_catalogue <- function(i) {
           runtime_minutes = runtime_i, fit_status = fit_status_i,
           converged = converged_i, hit_max = hit_max_i,
           inla_failure = inla_failure_i, nan_inf_logl = nan_inf_i,
-          vb_aborted = vb_aborted_i, n_iter = n_iter_i,
-          n_cpo_fail = n_cpo_fail_i)
+          vb_aborted = vb_aborted_i, n_iter = n_iter_i)
         
         # Temporary file prevents an interrupted save appearing as a completed fit
         tmp_i <- tempfile(pattern = "fit_", tmpdir = dirname(outfile_i), fileext = ".rds")
@@ -307,8 +304,9 @@ fit_catalogue <- function(i) {
           n_fit = nrow(catalogue_i), runtime_minutes = runtime_i,
           fit_status = fit_status_i, converged = converged_i, hit_max = hit_max_i,
           inla_failure = inla_failure_i, nan_inf_logl = nan_inf_i,
-          vb_aborted = vb_aborted_i, n_iter = n_iter_i,
-          n_cpo_fail = n_cpo_fail_i, status = "fitted", error = NA_character_,
+          vb_aborted = vb_aborted_i, n_iter = n_iter_i, 
+          min_sd = min_sd_i, degenerate = isTRUE(min_sd_i < 1e-6), 
+          status = "fitted", error = NA_character_,
           file = basename(outfile_i))
         
         rm(fit_i, output_i)
@@ -331,8 +329,9 @@ fit_catalogue <- function(i) {
         n_fit = nrow(catalogue_i), runtime_minutes = NA_real_,
         fit_status = ifelse(inla_failure_i, "inla_failure", "error"),
         converged = FALSE, hit_max = NA, inla_failure = inla_failure_i,
-        nan_inf_logl = NA, vb_aborted = NA, n_iter = NA_integer_,
-        n_cpo_fail = NA_integer_, status = "error", error = error_i,
+        nan_inf_logl = NA, vb_aborted = NA, n_iter = NA_integer_, 
+        min_sd = NA_real_, degenerate = NA,
+        status = "error", error = error_i,
         file = basename(outfile_i))
     })
   }
@@ -344,8 +343,8 @@ fit_catalogue <- function(i) {
 # Parallel execution
 #-------------------------------------------------------------------------------
 
-# Test four workers initially; reduce to 3 or 2 if memory pressure becomes high
-n_workers <- min(4, future::availableCores())
+# Six parallel workers, with one numerical thread per worker
+n_workers <- min(6, future::availableCores())
 
 message("Running ", n_fits, " fits using ", n_workers, " parallel workers.")
 
@@ -380,7 +379,11 @@ write.csv(fit_manifest, file.path(main_fit_dir, "fit_manifest.csv"), row.names =
 
 problem_fits <- fit_manifest[
   fit_manifest$status == "error" |
-    fit_manifest$fit_status %in% c("hit_max", "inla_failure", "unknown"), ]
+    fit_manifest$fit_status %in% c("hit_max", "inla_failure", "unknown") |
+    fit_manifest$hit_max %in% TRUE |
+    fit_manifest$degenerate %in% TRUE |
+    fit_manifest$vb_aborted %in% TRUE |
+    fit_manifest$nan_inf_logl %in% TRUE, ]
 
 write.csv(problem_fits, file.path(main_fit_dir, "problem_fits.csv"), row.names = FALSE)
 
@@ -390,12 +393,17 @@ write.csv(problem_fits, file.path(main_fit_dir, "problem_fits.csv"), row.names =
 
 print(table(fit_manifest$status))
 print(table(fit_manifest$converged, useNA = "ifany"))
-
+print(table(fit_manifest$fitted_kernel, fit_manifest$degenerate, useNA = "ifany"))
+message("Usable fits: ", sum(fit_manifest$converged & !fit_manifest$hit_max &
+                               !fit_manifest$degenerate & 
+                               !fit_manifest$vb_aborted &
+                               !fit_manifest$inla_failure & 
+                               !fit_manifest$nan_inf_logl, 
+                             na.rm = TRUE), "/", n_fits)
 stopifnot(
   nrow(fit_manifest) == n_fits,
   !anyDuplicated(fit_manifest[, c("truth_kernel", "rep", "fitted_kernel")])
 )
-message("Fits with CPO failures: ", sum(fit_manifest$n_cpo_fail > 0, na.rm = TRUE))
 
 message("Finished main simulation fitting: ",
         sum(fit_manifest$status != "error"), "/", n_fits, " fits available.")
