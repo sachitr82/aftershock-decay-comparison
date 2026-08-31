@@ -1018,15 +1018,20 @@ july13 <- cat_spatial %>%
 p_gr <- gr_data(july6$mag) %>%
   filter(cumulative > 0, incremental > 0) %>%
   ggplot(aes(mag)) +
-  geom_col(aes(y = incremental), fill = "grey75", colour = "grey30", width = dm)+
-  geom_line(aes(y = cumulative), colour = "steelblue", linewidth = 0.9) +
+  geom_col(aes(y = incremental, fill = "Incremental count"),
+           colour = "black", width = dm) +
+  geom_line(aes(y = cumulative, colour = "Cumulative count"), linewidth = 0.9) +
+  geom_vline(xintercept = 2.5, linetype = "dotted", linewidth = 0.7) +
+  scale_fill_manual(values = c("Incremental count" = "grey60"), name = NULL) +
+  scale_colour_manual(values = c("Cumulative count" = "steelblue"), name = NULL) +
   scale_y_log10() +
-  labs(title = "Frequency–magnitude distribution on 6 July 2019", 
-       x = "Magnitude", y = "Number of events (log scale)") +
+  labs(title = "Frequency–magnitude distribution on 6 July 2019",x = "Magnitude",
+       y = "Number of events (log scale)") +
   theme_bw() +
-  theme(panel.grid.minor = element_blank())
+  theme(panel.grid.minor = element_blank(), legend.position = "top")
 
 print(p_gr)
+
 gr_data(july8$mag)%>%
   filter(cumulative > 0, incremental > 0)%>%
   ggplot(aes(mag)) +
@@ -1181,6 +1186,9 @@ ggsave(file.path(figure_dir, "ridgecrest_mainshock_fmd.pdf"), p_gr,
 
 ggsave(file.path(figure_dir, "ridgecrest_post_mainshock_rate.pdf"), p_rate, 
        width = 7, height = 4.5)
+library(patchwork)
+
+
 ```
 # References
 
