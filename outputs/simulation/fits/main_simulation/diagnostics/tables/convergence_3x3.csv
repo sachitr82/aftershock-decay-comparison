@@ -1,10 +1,10 @@
 "truth_kernel","fitted_kernel","n_total","n_converged","convergence_rate","n_hit_max"
 "ou","ou",100,100,1,0
-"ou","mse",100,93,0.93,7
-"ou","rate_state",100,91,0.91,9
+"ou","mse",100,97,0.97,2
+"ou","rate_state",100,100,1,0
 "mse","ou",100,100,1,0
-"mse","mse",100,97,0.97,3
-"mse","rate_state",100,47,0.47,53
+"mse","mse",100,100,1,0
+"mse","rate_state",100,0,0,96
 "rate_state","ou",100,100,1,0
-"rate_state","mse",100,60,0.6,40
-"rate_state","rate_state",100,98,0.98,2
+"rate_state","mse",100,76,0.76,24
+"rate_state","rate_state",100,100,1,0

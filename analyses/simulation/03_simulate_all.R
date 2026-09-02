@@ -11,6 +11,9 @@ library(here)
 
 source(here::here("analyses", "simulation", "00_design.R"))
 
+# Calendar date corresponding to the end of the fitting window
+fit_end_date <- mainshock_date + T_fit_end
+
 #-------------------------------------------------------------------------------
 # Sequential execution
 #-------------------------------------------------------------------------------
@@ -25,8 +28,7 @@ stopifnot(
   nrow(sim_index) == 3 * n_rep,
   !anyDuplicated(sim_index$seed),
   setequal(sim_index$kernel, names(truths)),
-  all(table(sim_index$kernel) == n_rep)
-)
+  all(table(sim_index$kernel) == n_rep))
 
 #-------------------------------------------------------------------------------
 # Storage for simulation manifest

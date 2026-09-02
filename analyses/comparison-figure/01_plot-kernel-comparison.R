@@ -22,7 +22,7 @@ library(patchwork)
 #-------------------------------------------------------------------------------
 # Normalised densities and survival functions: log1p / expm1 for numerical stability
 #-------------------------------------------------------------------------------
-ß
+
 # Omori-Utsu 
 f_ou <- function(t, c, p) (p - 1) / c * (1 + t / c)^(-p)
 S_ou <- function(t, c, p) (1 + t / c)^(1 - p)

@@ -1,0 +1,4 @@
+"fitted_kernel","n_fit","runtime_minutes","fit_status","converged","posterior_valid","hit_max","inla_failure","nan_inf_logl","vb_aborted","n_iter","n_degenerate","file"
+"ou",3339,3.09348328113556,"converged",TRUE,TRUE,FALSE,FALSE,FALSE,FALSE,59,0,"ridgecrest_fit_ou.rds"
+"mse",3339,3.36716448465983,"converged",TRUE,TRUE,FALSE,FALSE,FALSE,FALSE,54,0,"ridgecrest_fit_mse.rds"
+"rate_state",3339,3.44838678042094,"converged",TRUE,TRUE,FALSE,FALSE,FALSE,FALSE,58,0,"ridgecrest_fit_rate_state.rds"

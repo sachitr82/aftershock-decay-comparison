@@ -68,9 +68,20 @@ source(here("src", "eda-helpers", "read_catalogue.R"))
 source(here("src", "eda-helpers", "mc_helpers.R"))
 
 ################################################################################
-# Global plot theme 
+# Global plot theme, second set for report plots
 ################################################################################
 theme_set(theme_bw())
+
+theme_report <- theme_bw(base_size = 13) +
+  theme(
+    axis.title = element_text(size = 15),
+    axis.text = element_text(size = 12),
+    legend.text = element_text(size = 11),
+    legend.title = element_text(size = 11),
+    plot.title = element_blank(),
+    plot.subtitle = element_blank(),
+    plot.margin = margin(5, 5, 5, 5))
+
 ################################################################################
 # Reusable objects
 ################################################################################
@@ -1121,20 +1132,20 @@ checkpoint_rates <- checkpoints %>%
 p_rate <- ggplot(checkpoint_rates, aes(date, mean_rate)) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 2) +
-  geom_hline(yintercept = baseline_rate, linetype = "dashed", colour = "firebrick",
-             linewidth = 0.7) +
+  geom_hline(yintercept = baseline_rate, linetype = "dashed", 
+             colour = "firebrick", linewidth = 0.8) +
   annotate("text", x = as.Date("2025-10-01"), y = baseline_rate, 
-           label = paste0("Pre-foreshock rate = ", round(baseline_rate, 3),
-                          " events/day"),
-    colour = "firebrick", hjust = 2.5, vjust = 1.5, size = 3.2) +
+           label = paste0("Pre-sequence rate = ", round(baseline_rate, 3), 
+                          " events/day"), colour = "firebrick", hjust = 2, 
+           vjust = 1.4, size = 4.3) +
   scale_y_log10(labels = scales::label_number(accuracy = 0.01)) +
-  scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y", 
                expand = expansion(mult = c(0.01, 0.02))) +
-  labs(title = "Post-mainshock seismicity rate", subtitle = expression(
-    M >= 2.5 ~"; rates over preceding three months"), x = NULL, 
-    y = "Mean event rate (events/day)") +
-  theme_bw()
-print(p_rate)
+  labs(x = NULL, y = "Mean event rate (events/day)") +
+  theme_bw(base_size = 12) +
+  theme(axis.title = element_text(size = 14), axis.text = element_text(size = 12),
+        plot.title = element_blank(), plot.subtitle = element_blank(),
+        panel.grid.minor = element_blank(), plot.margin = margin(4, 4, 4, 4))
 ```
 
 # Spatio-temporal visualisation
@@ -1153,7 +1164,7 @@ spatial_periods %>% count(period)
 ggplot(spatial_periods, aes(lon, lat)) +
 geom_point(alpha = 0.45, size = 1) +
 facet_wrap(~ period, ncol = 2) +
-coord_quickmap(xlim = range(cat_ridgecrest$lon), ylim = range(cat_ridgecrest$lat))+
+coord_quickmap(xlim = range(cat_temporal$lon), ylim = range(cat_temporal$lat))+
 labs(x = "Longitude", y = "Latitude", 
      title = "Spatial composition of Ridgecrest-window seismicity",
      subtitle = expression(M >= 2.5)) +
@@ -1162,7 +1173,7 @@ labs(x = "Longitude", y = "Latitude",
 
 # Gutenberg-Richter $b$
 
-With $M_0 = 2.5$ and the restricted catalogue, we obtain the corresponding $b$-value from the Aki-Utsu MLE as $0.793 \pm 0.016$ on 3,339 events.
+With $M_0 = 2.5$ and the restricted catalogue, we obtain the corresponding $b$-value from the Aki-Utsu MLE as $0.794 \pm 0.016$ on 3,339 events.
 
 ```{r b-value}
 # Filter to observations above cutoff and compute b-value MLE for whole sequence
@@ -1171,25 +1182,69 @@ b_aki(cat_temporal$mag, mc = 2.5, dm = 0.1)
 
 # Save relevant figures for report
 
-```{r save-report-figures}
+```{r save-report-figs}
 figure_dir <- here("outputs", "eda", "figures")
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 
-ggsave(file.path(figure_dir, "ridgecrest_spatial_window.pdf"), p_spatial, 
+theme_report <- theme_bw(base_size = 10.5) +
+  theme(axis.title = element_text(size = 12), axis.text = element_text(size = 10),
+        plot.title = element_blank(), plot.subtitle = element_blank(), 
+        panel.grid.minor = element_blank(), plot.margin = margin(4, 4, 4, 4))
+
+p_spatial_report <- p_spatial +
+  labs(title = NULL) +
+  theme_report +
+  guides(shape = guide_legend(nrow = 1, byrow = TRUE), 
+         colour = guide_legend(nrow = 1, byrow = TRUE)) +
+  theme(legend.position = "bottom", legend.direction = "horizontal", 
+        legend.box = "horizontal", legend.text = element_text(size = 9.5), 
+        legend.key.width = unit(0.8, "lines"), 
+        legend.key.height = unit(0.8, "lines"), 
+        legend.spacing.x = unit(0.15, "cm"), 
+        legend.margin = margin(2, 0, 0, 0), 
+        legend.box.margin = margin(0, 0, 0, 0))
+
+
+p_stai_report <- p_stai +
+  labs(title = NULL, x = NULL, y = "Magnitude") +
+  theme_report +
+  theme(axis.text.x = element_text(size = 9.5))
+
+p_gr_report <- p_gr +
+  labs(title = NULL, x = "Magnitude", y = "Number of events (log scale)") +
+  theme_report +
+  theme(legend.position = "top", legend.text = element_text(size = 9.5), 
+        legend.key.width = unit(0.9, "lines"), 
+        legend.spacing.x = unit(0.15, "cm"), 
+        legend.margin = margin(0, 0, 0, 0))
+
+p_completeness_report <- (p_stai_report | p_gr_report) +
+  plot_layout(widths = c(1, 1)) +
+  plot_annotation(tag_levels = "a") &
+  theme(plot.tag = element_text(size = 12, face = "bold"))
+
+#-------------------------------------------------------------------------------
+# Preview
+#-------------------------------------------------------------------------------
+
+print(p_spatial_report)
+print(p_completeness_report)
+print(p_rate)
+
+#-------------------------------------------------------------------------------
+# Save
+#-------------------------------------------------------------------------------
+
+ggsave(file.path(figure_dir, "ridgecrest_spatial_window.pdf"), p_spatial_report, 
        width = 7,height = 6)
 
-ggsave(file.path(figure_dir, "ridgecrest_stai_magnitude_time.pdf"), p_stai, 
+ggsave(file.path(figure_dir, "ridgecrest_completeness.pdf"), p_completeness_report, 
        width = 7, height = 4.5)
-
-ggsave(file.path(figure_dir, "ridgecrest_mainshock_fmd.pdf"), p_gr, 
-       width = 6.5, height = 4.5)
 
 ggsave(file.path(figure_dir, "ridgecrest_post_mainshock_rate.pdf"), p_rate, 
        width = 7, height = 4.5)
-library(patchwork)
-
-
 ```
+
 # References
 
 ::: {#refs}

@@ -49,7 +49,7 @@ mainshock_event <- data.frame(ts = 0, magnitudes = 7.1)
 
 # Empirically Ridgecrest pre-foreshock total event rate used as a simulation
 # background-rate anchor. Not a direct estimate of mu.
-mu_true <- 0.075
+mu_true <- 0.074
 
 # Ridgecrest-informed anchor
 alpha_true <- 1.89
