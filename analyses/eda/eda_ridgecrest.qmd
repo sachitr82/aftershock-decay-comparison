@@ -29,7 +29,7 @@ The workflow largely follows the exploratory analysis developed for the `ETAS.in
 
 ## The data
 
-This notebook analyses `2026-07-17_scedc-scsn_socal_2016-2025_raw.txt`: the **Southern California Seismic Network (SCSN) [@scsn1926] earthquake catalogue** (2016-2025), obtained from the **Southern California Earthquake Data Center (SCEDC) [@scedc2013]**. **2016** was chosen as the start year to ensure a consistent processing regime [@scedc_changehistory], and **2025** as the end year as the last complete calendar year of processed data [@scedc_cataloguestatus]. We impose no restrictions on magnitude, depth, or event type. Additionally, the latitude/longitude search bounds were left unrestricted, with the geographic restriction imposed by the local geographic-type filter. This raw catalogue is later filtered to earthquakes and subset to the Ridgecrest sequence during analysis.
+This notebook analyses `2026-07-23_scedc-scsn_socal_2016-2025_raw.txt`: the **Southern California Seismic Network (SCSN) [@scsn1926] earthquake catalogue** (2016-2025), obtained from the **Southern California Earthquake Data Center (SCEDC) [@scedc2013]**. **2016** was chosen as the start year to ensure a consistent processing regime [@scedc_changehistory], and **2025** as the end year as the last complete calendar year of processed data [@scedc_cataloguestatus]. We impose no restrictions on magnitude, depth, or event type. Additionally, the latitude/longitude search bounds were left unrestricted, with the geographic restriction imposed by the local geographic-type filter. This raw catalogue is later filtered to earthquakes and subset to the Ridgecrest sequence during analysis.
 
 **The data's source and full documentation are detailed in `data/raw/metadata.txt`.**
 
@@ -1243,6 +1243,20 @@ ggsave(file.path(figure_dir, "ridgecrest_completeness.pdf"), p_completeness_repo
 
 ggsave(file.path(figure_dir, "ridgecrest_post_mainshock_rate.pdf"), p_rate, 
        width = 7, height = 4.5)
+```
+
+# Save final Ridgecrest catalogue
+
+```{r}
+derived_dir <- here("data", "derived")
+dir.create(derived_dir, recursive = TRUE, showWarnings = FALSE)
+
+saveRDS(cat_temporal, 
+        here("data", "derived", "ridgecrest_temporal_catalogue.rds"))
+
+write.csv(cat_temporal,
+          here("data", "derived", "ridgecrest_temporal_catalogue.csv"),
+          row.names = FALSE)
 ```
 
 # References
