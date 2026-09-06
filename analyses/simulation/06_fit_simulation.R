@@ -258,8 +258,7 @@ fit_catalogue <- function(i) {
           total.data = catalogue_i, M0 = M0, T1 = T_fit_start, T2 = T_fit_end,
           link.functions = link_i, coef.t. = temporal_binning$coef.t,
           delta.t. = temporal_binning$delta.t, N.max. = temporal_binning$N.max,
-          bru.opt = bru_i, kernel = fitted_i
-        )
+          bru.opt = bru_i, kernel = fitted_i)
         
         runtime_i <- as.numeric(difftime(Sys.time(), start_i, units = "mins"))
         
