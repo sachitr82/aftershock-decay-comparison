@@ -340,7 +340,8 @@ make_bru_options_P0 <- function(kernel, rel_tol = 0.1, max_iter = 100) {
       th.ta = inv$ta(init["ta"]))
   }
   
-  list(bru_verbose = 0, bru_max_iter = max_iter,bru_rel_tol = rel_tol,
+  list(bru_verbose = 0, bru_max_iter = max_iter, 
+       bru_method = list(rel_tol = rel_tol),
        bru_initial = th_init)
 }
 

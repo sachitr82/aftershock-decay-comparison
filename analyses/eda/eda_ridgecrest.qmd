@@ -649,19 +649,16 @@ ggplot(gr, aes(mag)) +
            label = paste0("GFT = ", mc_gft_val),
            colour = "darkblue", hjust = 1.5) +
   labs(title = "Frequency-magnitude distribution", x = "Magnitude",
-    y = "Number of events (log scale)"
-  )
+    y = "Number of events (log scale)")
 
 # Plot b-values for each Mc
 mbs <- mc_mbs(cat$mag, dm)
 ggplot(mbs$curve, aes(mc, b)) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 1.2) +
-  geom_errorbar(
-    aes(ymin = b - b_err,
-        ymax = b + b_err),
-    width = 0.03
-  ) +
+  geom_errorbar(aes(ymin = b - b_err,
+                    ymax = b + b_err),
+                width = 0.03) +
   geom_vline(xintercept = mbs$mc, colour = "forestgreen", linetype = "solid") +
   geom_vline(xintercept = mc_maxc, colour = "red", linetype = "dashed") +
   geom_vline(xintercept = mc_gft_val, colour = "darkblue", linetype = "dashed") +
@@ -674,8 +671,7 @@ ggplot(mbs$curve, aes(mc, b)) +
   annotate("text",  x = mbs$mc, y = max(mbs$b), 
            label = paste0("MBS = ", mbs$mc), colour = "forestgreen",
            hjust = -0.5, vjust = -0.3) +
-  labs(title = "b-value stability", x = expression(M[c]), y = expression(hat(b))
-  )
+  labs(title = "b-value stability", x = expression(M[c]), y = expression(hat(b)))
 ```
 
 ### Completeness drift
@@ -868,7 +864,7 @@ ggplot(gr_spatial, aes(mag)) +
            label = paste0("GFT = ", mc_gft_val),
            colour = "darkblue", hjust = 1.5) +
   labs(title = "Frequency-magnitude distribution", x = "Magnitude",
-    y = "Number of events (log scale)"
+    y = "Number of events plot_g)"
   )
 
 # Plot b-values for each Mc
@@ -901,22 +897,22 @@ While it's tempting to determine the $M_0$ from the entire catalogue $M_c$, we m
 
 ```{r STAI}
 p_stai <- cat_spatial %>%
-  filter(datetime >= as.POSIXct("2019-07-04", tz = "UTC"),
+  filter(datetime >= as.POSIXct("2019-07-02", tz = "UTC"),
          datetime <  as.POSIXct("2019-07-14", tz = "UTC")) %>%
   ggplot(aes(datetime, mag)) +
   geom_point(size = 0.45, alpha = 0.35, colour = "grey25") +
   geom_vline(xintercept = foreshock_time, linetype = "dashed", colour = "steelblue") +
   geom_vline(xintercept = mainshock_time, linetype = "dashed", colour = "firebrick") +
   geom_hline(yintercept = 2.5, linetype = "dotted", linewidth = 0.7) +
-  annotate("text", x = foreshock_time, y = 7.2, label = "M6.4", 
-           colour = "steelblue", hjust = -0.1) +
-  annotate("text", x = mainshock_time, y = 7.2, label = "M7.1", 
+  annotate("text", x = foreshock_time, y = 7.2, label = "M6.4",
+           colour = "steelblue", hjust = 1.1) +
+  annotate("text", x = mainshock_time, y = 7.2, label = "M7.1",
            colour = "firebrick", hjust = -0.1) +
-  annotate("text", x = as.POSIXct("2019-07-12", tz = "UTC"), y = 2.55,
-           label = expression(M[0] == 2.5), hjust = 9, vjust = -0.4) +
-  scale_x_datetime(date_breaks = "2 days", date_labels = "%d %b") +
-  labs(title = "Magnitude reporting around the Ridgecrest mainshock", x = NULL, 
-       y = "Magnitude") +
+     scale_x_datetime(breaks = as.POSIXct(c("2019-07-02", "2019-07-06",
+                                         "2019-07-10", "2019-07-14"), tz = "UTC"),
+                   date_labels = "%d %b") +
+  labs(title = "Magnitude reporting around the Ridgecrest mainshock", 
+       x = "Date (2019)",  y = "Magnitude") +
   theme_bw()
 print(p_stai)
 ```
@@ -1036,7 +1032,7 @@ p_gr <- gr_data(july6$mag) %>%
   scale_colour_manual(values = c("Cumulative count" = "steelblue"), name = NULL) +
   scale_y_log10() +
   labs(title = "Frequency–magnitude distribution on 6 July 2019",x = "Magnitude",
-       y = "Number of events (log scale)") +
+       y = "Number of events") +
   theme_bw() +
   theme(panel.grid.minor = element_blank(), legend.position = "top")
 
@@ -1133,14 +1129,10 @@ p_rate <- ggplot(checkpoint_rates, aes(date, mean_rate)) +
   geom_point(size = 2) +
   geom_hline(yintercept = baseline_rate, linetype = "dashed", 
              colour = "firebrick", linewidth = 0.8) +
-  annotate("text", x = as.Date("2025-10-01"), y = baseline_rate, 
-           label = paste0("Pre-sequence rate = ", round(baseline_rate, 3), 
-                          " events/day"), colour = "firebrick", hjust = 2, 
-           vjust = 1.4, size = 4.3) +
   scale_y_log10(labels = scales::label_number(accuracy = 0.01)) +
   scale_x_date(date_breaks = "1 year", date_labels = "%Y", 
                expand = expansion(mult = c(0.01, 0.02))) +
-  labs(x = NULL, y = "Mean event rate (events/day)") +
+  labs(x = "Year", y = "Mean event rate (events/day)") +
   theme_bw(base_size = 12) +
   theme(axis.title = element_text(size = 14), axis.text = element_text(size = 12),
         plot.title = element_blank(), plot.subtitle = element_blank(),
@@ -1193,55 +1185,66 @@ theme_report <- theme_bw(base_size = 10.5) +
 p_spatial_report <- p_spatial +
   labs(title = NULL) +
   theme_report +
-  guides(shape = guide_legend(nrow = 1, byrow = TRUE), 
-         colour = guide_legend(nrow = 1, byrow = TRUE)) +
-  theme(legend.position = "bottom", legend.direction = "horizontal", 
-        legend.box = "horizontal", legend.text = element_text(size = 9.5), 
-        legend.key.width = unit(0.8, "lines"), 
-        legend.key.height = unit(0.8, "lines"), 
-        legend.spacing.x = unit(0.15, "cm"), 
-        legend.margin = margin(2, 0, 0, 0), 
-        legend.box.margin = margin(0, 0, 0, 0))
+   scale_x_continuous(breaks = c(-118, -117),
+                     labels = function(x) paste0(abs(x), "°W"))  +
+  scale_y_continuous(labels = function(y) paste0(y, "°N")) +
+  theme(plot.margin = margin(5, 15, 5, 5))
 
+p_rate_report <- p_rate +
+  labs(title = NULL) +
+  theme_report +
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y",
+               expand = expansion(mult = c(0.01, 0.02))) +
+  theme(plot.margin = margin(5, 5, 5, 15))
+
+p_window_report <- (p_spatial_report | p_rate_report) +
+  plot_layout(widths = c(1, 1.4), guides = "collect") +
+  plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")",
+                  theme = theme(legend.position = "bottom")) &
+  theme(plot.tag = element_text(size = 10, face = "plain"),
+        legend.position = "bottom")
 
 p_stai_report <- p_stai +
-  labs(title = NULL, x = NULL, y = "Magnitude") +
+  labs(title = NULL, x = "Date (2019)", y = "Magnitude") +
   theme_report +
   theme(axis.text.x = element_text(size = 9.5))
 
 p_gr_report <- p_gr +
-  labs(title = NULL, x = "Magnitude", y = "Number of events (log scale)") +
+  labs(title = NULL, x = "Magnitude", y = "Number of events") +
   theme_report +
-  theme(legend.position = "top", legend.text = element_text(size = 9.5), 
-        legend.key.width = unit(0.9, "lines"), 
-        legend.spacing.x = unit(0.15, "cm"), 
-        legend.margin = margin(0, 0, 0, 0))
+  guides(fill = guide_legend(order = 1), colour = guide_legend(order = 2)) +
+  theme(legend.position = c(0.99, 0.99),
+        legend.justification = c(1, 1),
+        legend.box = "vertical",
+        legend.box.just = "left",
+        legend.spacing.y = unit(0, "cm"),
+        legend.background = element_rect(fill = "white", colour = NA),
+        legend.text = element_text(size = 8),
+        legend.key.width = unit(0.9, "lines"),
+        legend.key.height = unit(0.9, "lines"),
+        legend.margin = margin(1, 2, 1, 2))
 
-p_completeness_report <- (p_stai_report | p_gr_report) +
-  plot_layout(widths = c(1, 1)) +
-  plot_annotation(tag_levels = "a") &
-  theme(plot.tag = element_text(size = 12, face = "bold"))
+p_completeness_report <- (p_stai_report | plot_spacer() | p_gr_report) +
+  plot_layout(widths = c(1, 0.08, 1)) +
+  plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")") &
+  theme(plot.tag = element_text(size = 10, face = "plain"))
 
 #-------------------------------------------------------------------------------
 # Preview
 #-------------------------------------------------------------------------------
 
-print(p_spatial_report)
+print(p_window_report)
 print(p_completeness_report)
-print(p_rate)
 
 #-------------------------------------------------------------------------------
 # Save
 #-------------------------------------------------------------------------------
 
-ggsave(file.path(figure_dir, "ridgecrest_spatial_window.pdf"), p_spatial_report, 
-       width = 7,height = 6)
-
 ggsave(file.path(figure_dir, "ridgecrest_completeness.pdf"), p_completeness_report, 
-       width = 7, height = 4.5)
+       width = 7, height = 3)
 
-ggsave(file.path(figure_dir, "ridgecrest_post_mainshock_rate.pdf"), p_rate, 
-       width = 7, height = 4.5)
+ggsave(file.path(figure_dir, "ridgecrest_window.pdf"), p_window_report,
+       width = 8.5, height = 4.2)
 ```
 
 # Save final Ridgecrest catalogue

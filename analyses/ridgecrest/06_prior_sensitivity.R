@@ -190,7 +190,7 @@ write.csv(fit_summary, file.path(out_dir, "fit_summary.csv"), row.names = FALSE)
 # Compare with baseline model evidence
 #-------------------------------------------------------------------------------
 
-base_dir <- here("outputs", "ridgecrest", "fits", "baseline")
+base_dir <- here("outputs", "ridgecrest", "baseline")
 lml_ou <- readRDS(file.path(base_dir, "fit_ou.rds"))$lml
 lml_mse <- readRDS(file.path(base_dir, "fit_mse.rds"))$lml
 lml_rs <- readRDS(file.path(base_dir, "fit_rate_state.rds"))$lml

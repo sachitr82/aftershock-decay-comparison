@@ -28,13 +28,6 @@ fit_manifest <- read.csv(file.path(main_fit_dir, "fit_manifest.csv"),
 dir.create(misspec_dir, recursive = TRUE, showWarnings = FALSE)
 
 #-------------------------------------------------------------------------------
-# Inputs
-#-------------------------------------------------------------------------------
-
-correct_tv <- read_csv(file.path(recovery_dir, "functional_tv_by_catalogue.csv"),
-                       show_col_types = FALSE)
-
--------------------------------------------------------------------------------
 # Load fit manifest and restrict to usable fits (converged)
 #-------------------------------------------------------------------------------
 

@@ -38,18 +38,16 @@ results <- results %>%
 
 summary_tab <- results %>%
   group_by(tolerance) %>%
-  summarise(
-    n_fits=n(),
-    n_converged = sum(converged),
-    n_hit_max = sum(hit_max),
-    median_iter = median(n_iter),
-    max_iter = max(n_iter),
-    median_iter_diff = median(iter_diff),
-    median_runtime = median(runtime_minutes),
-    max_runtime = max(runtime_minutes),
-    median_runtime_ratio=median(runtime_ratio),
-    .groups="drop"
-  )
+  summarise(n_fits=n(),
+            n_converged = sum(converged),
+            n_hit_max = sum(hit_max),
+            median_iter = median(n_iter),
+            max_iter = max(n_iter),
+            median_iter_diff = median(iter_diff),
+            median_runtime = median(runtime_minutes),
+            max_runtime = max(runtime_minutes),
+            median_runtime_ratio=median(runtime_ratio),
+            .groups="drop")
 
 print(summary_tab)
 write.csv(summary_tab, file.path(analysis_dir, "rel_tol_summary.csv"),
@@ -68,10 +66,9 @@ write.csv(problem_fits, file.path(analysis_dir, "rel_tol_problem_fits.csv"),
 # Extract physical-scale posterior marginals
 #-------------------------------------------------------------------------------
 
-temporal_parameters <- list(
-  ou = c("K", "c", "p"),
-  mse = c("K", "d", "rho", "gamma"),
-  rate_state = c("K", "B", "ta"))
+temporal_parameters <- list(ou = c("K", "c", "p"),
+                            mse = c("K", "d", "rho", "gamma"),
+                            rate_state = c("K", "B", "ta"))
 
 posterior_curves <- list()
 j <- 1
@@ -90,25 +87,21 @@ for (kernel in names(temporal_parameters)) {
       link.functions = obj_i$link.functions,
       kernel = kernel))$post.df
     
-    post_i <- post_i[
-      post_i$param %in% temporal_parameters[[kernel]], ]
+    post_i <- post_i[post_i$param %in% temporal_parameters[[kernel]], ]
     
-    posterior_curves[[j]] <- data.frame(
-      kernel = kernel,
-      tolerance = tolerance,
-      parameter = post_i$param,
-      value = post_i$x,
-      density = post_i$y)
-    
+    posterior_curves[[j]] <- data.frame(kernel = kernel,
+                                        tolerance = tolerance,
+                                        parameter = post_i$param,
+                                        value = post_i$x,
+                                        density = post_i$y)
     j <- j + 1
   }
 }
 
 posterior_density <- do.call(rbind, posterior_curves)
 
-posterior_density$tolerance <- factor(
-  posterior_density$tolerance,
-  levels = c("RT01", "RT005", "RT001"))
+posterior_density$tolerance <- factor(posterior_density$tolerance,
+                                      levels = c("RT01", "RT005", "RT001"))
 
 #-------------------------------------------------------------------------------
 # Posterior marginal overlays
@@ -118,9 +111,9 @@ tol_cols <- c(RT01  = "firebrick", RT005 = "forestgreen", RT001 = "steelblue")
 tol_lty <- c(RT01 = "dashed", RT005 = "solid", RT001 = "dotted")
 tol_labels <- c(RT01 = "0.1", RT005 = "0.05", RT001 = "0.01")
 
-p_post <- ggplot(
-  posterior_density,
-  aes(x = value, y = density, colour = tolerance, linetype = tolerance)) +
+p_post <- ggplot(posterior_density, 
+                 aes(x = value, y = density, colour = tolerance, 
+                     linetype = tolerance)) +
   geom_line(linewidth = 0.8) +
   facet_wrap(~ kernel + parameter, scales = "free") +
   scale_colour_manual(values = tol_cols, labels = tol_labels) +
@@ -174,24 +167,21 @@ for (kernel in names(temporal_parameters)) {
       t1 <- refinements[[comparison]][1]
       t2 <- refinements[[comparison]][2]
       
-      d1 <- posterior_density[
-        posterior_density$kernel == kernel &
-          posterior_density$parameter == parameter &
-          posterior_density$tolerance == t1, ]
+      d1 <- posterior_density[posterior_density$kernel == kernel &
+                              posterior_density$parameter == parameter &
+                              posterior_density$tolerance == t1, ]
       
-      d2 <- posterior_density[
-        posterior_density$kernel == kernel &
-          posterior_density$parameter == parameter &
-          posterior_density$tolerance == t2, ]
+      d2 <- posterior_density[posterior_density$kernel == kernel &
+                              posterior_density$parameter == parameter &
+                              posterior_density$tolerance == t2, ]
       
       d <- calc_overlap(d1$value, d1$density, d2$value, d2$density)
       
-      overlap_rows[[j]] <- data.frame(
-        kernel = kernel,
-        parameter = parameter,
-        comparison = comparison,
-        overlap = d["overlap"],
-        TV = d["TV"])
+      overlap_rows[[j]] <- data.frame(kernel = kernel,
+                                      parameter = parameter,
+                                      comparison = comparison,
+                                      overlap = d["overlap"],
+                                      TV = d["TV"])
       
       j <- j + 1
     }
@@ -203,10 +193,9 @@ rownames(posterior_overlap) <- NULL
 
 print(posterior_overlap)
 
-write.csv(
-  posterior_overlap,
-  file.path(analysis_dir, "posterior_overlap.csv"),
-  row.names = FALSE)
+write.csv(posterior_overlap,
+          file.path(analysis_dir, "posterior_overlap.csv"),
+          row.names = FALSE)
 
 #-------------------------------------------------------------------------------
 # # Functional stability under sequential rel_tol refinement
@@ -229,7 +218,9 @@ for (kernel in c("ou", "mse", "rate_state")) {
       paste0("truth_", kernel, "_fit_", kernel, "_", tolerance, ".rds")))
     
     temp_i <- ETAS.inlabru::posterior_temporal_summary(
-      list(model.fit = obj_i$fit, link.functions = obj_i$link.functions, kernel = kernel),
+      list(model.fit = obj_i$fit, 
+           link.functions = obj_i$link.functions, 
+           kernel = kernel),
       t.eval = t_grid, n.samp = n_samp)
     
     functional_rows[[j]] <- temp_i$summary %>%
@@ -249,9 +240,9 @@ functional_post$tolerance <- factor(
 # Functional posterior overlays
 #-------------------------------------------------------------------------------
 
-p_function <- ggplot(
-  functional_post,
-  aes(x = time, y = median, colour = tolerance, linetype = tolerance)) +
+p_function <- ggplot(functional_post, 
+                     aes(x = time, y = median, colour = tolerance, 
+                       linetype = tolerance)) +
   geom_line(linewidth = 0.8) +
   facet_grid(kernel ~ quantity, scales = "free_y") +
   scale_x_log10() + scale_y_log10() +

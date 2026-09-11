@@ -9,6 +9,7 @@
 library(ETAS.inlabru)
 library(here)
 library(ggplot2)
+library(patchwork)
 
 source(here("analyses", "simulation", "00_design.R"))
 
@@ -109,11 +110,8 @@ prior_summary <- rbind(
   rs_G_0_T = q_summary(draws$rate_state$G_0_T)
 )
 
-prior_summary <- data.frame(
-  quantity = rownames(prior_summary),
-  prior_summary,
-  row.names = NULL
-)
+prior_summary <- data.frame(quantity = rownames(prior_summary), 
+                            prior_summary, row.names = NULL)
 
 print(prior_summary)
 
@@ -139,10 +137,9 @@ t_grid <- exp(seq(log(1e-4), log(T_obs), length.out = 500))
 calc_curves <- function(kernel, x, idx) {
   
   vapply(idx, function(i) {
-    ETAS.inlabru::temporal_kernel(
-      dt = t_grid,
-      theta = get_theta(kernel, x, i),
-      kernel = kernel)
+    ETAS.inlabru::temporal_kernel(dt = t_grid,
+                                  theta = get_theta(kernel, x, i),
+                                  kernel = kernel)
   }, 
   numeric(length(t_grid)))
 }
@@ -151,11 +148,9 @@ calc_curves <- function(kernel, x, idx) {
 # Evaluate raw temporal kernels g(t)
 #-------------------------------------------------------------------------------
 
-g_plot <- list(
-  ou = calc_curves("ou", draws$ou, idx_curve),
-  mse = calc_curves("mse", draws$mse, idx_curve),
-  rate_state = calc_curves("rate_state", draws$rate_state, idx_curve)
-)
+g_plot <- list(ou = calc_curves("ou", draws$ou, idx_curve),
+               mse = calc_curves("mse", draws$mse, idx_curve),
+               rate_state = calc_curves("rate_state", draws$rate_state, idx_curve))
 
 #-------------------------------------------------------------------------------
 # Normalise each kernel by its own fitting-window mass
@@ -174,10 +169,9 @@ h_plot <- list(
 
 plot_prior_draws <- function(H, title) {
   
-  plot_data <- data.frame(
-    time = rep(t_grid, ncol(H)),
-    h = pmax(as.vector(H), 1e-300),
-    draw = rep(seq_len(ncol(H)), each = length(t_grid)))
+  plot_data <- data.frame(time = rep(t_grid, ncol(H)), 
+                          h = pmax(as.vector(H), 1e-300),
+                          draw = rep(seq_len(ncol(H)), each = length(t_grid)))
   
   ggplot(plot_data, aes(x = time, y = h, group = draw)) +
   geom_line(alpha = 0.01, linewidth = 0.2) +
@@ -190,8 +184,7 @@ plot_prior_draws <- function(H, title) {
 plots <- list(
   ou = plot_prior_draws(h_plot$ou, "OU baseline prior"),
   mse = plot_prior_draws(h_plot$mse, "MSE baseline prior"),
-  rate_state = plot_prior_draws(h_plot$rate_state, "Rate-state baseline prior")
-)
+  rate_state = plot_prior_draws(h_plot$rate_state, "Rate-state baseline prior"))
 
 figfile <- file.path(figure_dir, "baseline_prior_normalised_kernel_draws.png")
 

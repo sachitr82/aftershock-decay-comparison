@@ -88,16 +88,14 @@ kernel_lty <- setNames(c("solid", "dashed", "dotted"), kernel_levels)
 log_lab <- scales::trans_format("log10", scales::math_format(10^.x))
 
 base_theme <- theme_bw(base_size = 10) +
-  theme(
-    legend.title = element_blank(),
-    legend.position = "bottom",
-    legend.key.width = grid::unit(0.9, "lines"),
-    legend.key.spacing.x = grid::unit(0.5, "cm"),
-    legend.spacing.x = grid::unit(0.6, "cm"),
-    legend.text = element_text(size = 10),
-    panel.grid.minor = element_line(linewidth = 0.15),
-    plot.title = element_text(size = 10, face = "plain")
-  )
+  theme(legend.title     = element_blank(),
+        legend.position  = "bottom",
+        legend.key.width = unit(0.9, "lines"),
+        legend.key.spacing.x = unit(0.5, "cm"),
+        legend.spacing.x = unit(0.6, "cm"),
+        legend.text      = element_text(size = 11),
+        panel.grid.minor = element_line(linewidth = 0.15),
+        plot.title       = element_text(size = 10, face = "plain"))
 
 x_scale <- scale_x_log10(breaks = 10^seq(-4, 4, by = 1), labels = log_lab,
                          expand = expansion(mult = 0))
@@ -113,8 +111,7 @@ p_trigger <- ggplot(kern, aes(t, g, colour = kernel, linetype = kernel)) +
   coord_cartesian(ylim = c(1e-12, 1)) + 
   scale_colour_manual(values = kernel_cols) +
   scale_linetype_manual(values = kernel_lty) +
-  labs(title = "(a) Temporal triggering function", 
-       x = "Time since triggering event (days)", y = expression(g[k](t))) +
+  labs(x = "Time since triggering event (days)", y = expression(g[k](t))) +
   base_theme
 
 #-------------------------------------------------------------------------------
@@ -128,8 +125,7 @@ p_mass <- ggplot(kern, aes(t, G, colour = kernel, linetype = kernel)) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.04))) +
   scale_colour_manual(values = kernel_cols) +
   scale_linetype_manual(values = kernel_lty) +
-  labs(title = "(b) Cumulative triggering mass", 
-       x = "Time since triggering event (days)", y = expression(G[k](0*t))) +
+  labs(x = "Time since triggering event (days)", y = expression(G[k](0,t))) +
   base_theme
 
 #-------------------------------------------------------------------------------
@@ -137,8 +133,11 @@ p_mass <- ggplot(kern, aes(t, G, colour = kernel, linetype = kernel)) +
 #-------------------------------------------------------------------------------
 
 fig <- (p_trigger | p_mass) +
-  plot_layout(guides = "collect") &
-  theme(legend.position = "bottom")
+  plot_layout(guides = "collect") +
+  plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")",
+                  theme = theme(legend.position = "bottom")) &
+  theme(legend.position = "bottom",
+        plot.tag = element_text(size = 10, face = "plain"))
 
 print(fig)
 
@@ -159,7 +158,7 @@ print(G_inf_plot)
 # Save figure
 #-------------------------------------------------------------------------------
 
-fig_dir <- here("outputs", "simulation", "study-design")
+fig_dir <- here("outputs", "simulation", "figures")
 
 dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 

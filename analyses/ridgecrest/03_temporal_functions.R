@@ -13,9 +13,11 @@ library(ETAS.inlabru)
 
 candidate_kernels <- c("ou", "mse", "rate_state")
 
-ridgecrest_fit_dir <- here("outputs", "ridgecrest", "fits", "baseline")
-ridgecrest_summary_dir <- here("outputs", "ridgecrest", "summaries")
-ridgecrest_figure_dir <- here("outputs", "ridgecrest", "figures")
+ridgecrest_fit_dir <- here("outputs", "ridgecrest", "baseline")
+
+ridgecrest_summary_dir <- here(ridgecrest_fit_dir, "summaries")
+
+ridgecrest_figure_dir <- here(ridgecrest_fit_dir, "figures")
 
 dir.create(ridgecrest_summary_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(ridgecrest_figure_dir, recursive = TRUE, showWarnings = FALSE)

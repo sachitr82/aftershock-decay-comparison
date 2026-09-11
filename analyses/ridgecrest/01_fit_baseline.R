@@ -47,20 +47,20 @@ T_fit_end <- as.numeric(
 # Catalogue checks
 #-------------------------------------------------------------------------------
 
-stopifnot(is.data.frame(catalogue_rc))
-stopifnot(all(c("ts", "magnitudes", "idx.p") %in% names(catalogue_rc)))
-stopifnot(all(is.finite(catalogue_rc$ts)))
-stopifnot(all(is.finite(catalogue_rc$magnitudes)))
-stopifnot(all(catalogue_rc$magnitudes >= M0))
-stopifnot(all(diff(catalogue_rc$ts) >= 0))
-stopifnot(any(catalogue_rc$ts == 0))
-stopifnot(min(catalogue_rc$ts) >= T_fit_start)
-stopifnot(max(catalogue_rc$ts) <= T_fit_end)
+stopifnot(is.data.frame(cat_rc))
+stopifnot(all(c("ts", "magnitudes", "idx.p") %in% names(cat_rc)))
+stopifnot(all(is.finite(cat_rc$ts)))
+stopifnot(all(is.finite(cat_rc$magnitudes)))
+stopifnot(all(cat_rc$magnitudes >= M0))
+stopifnot(all(diff(cat_rc$ts) >= 0))
+stopifnot(any(cat_rc$ts == 0))
+stopifnot(min(cat_rc$ts) >= T_fit_start)
+stopifnot(max(cat_rc$ts) <= T_fit_end)
 
-cat("Ridgecrest catalogue:", nrow(catalogue_rc), "events\n")
+cat("Ridgecrest catalogue:", nrow(cat_rc), "events\n")
 cat("Observation window:", T_fit_start, "to", T_fit_end, "days\n")
-cat("Event-time range:", range(catalogue_rc$ts), "days\n")
-cat("Magnitude range:", range(catalogue_rc$magnitudes), "\n")
+cat("Event-time range:", range(cat_rc$ts), "days\n")
+cat("Magnitude range:", range(cat_rc$magnitudes), "\n")
 #-------------------------------------------------------------------------------
 # Fixed fitting design
 #-------------------------------------------------------------------------------
@@ -71,7 +71,7 @@ stopifnot(temporal_binning$N.max == 14)
 stopifnot(fit_control$rel_tol == 0.1)
 stopifnot(fit_control$max_iter == 100)
 
-ridgecrest_fit_dir <- here("outputs", "ridgecrest", "fits", "baseline")
+ridgecrest_fit_dir <- here("outputs", "ridgecrest", "baseline")
 dir.create(ridgecrest_fit_dir, recursive = TRUE, showWarnings = FALSE)
 
 fit_seeds <- c(ou = 400001, mse = 400002, rate_state = 400003)
@@ -175,7 +175,7 @@ for (k in seq_along(candidate_kernels)) {
     
     start_i <- Sys.time()
     
-    fit_i <- ETAS.inlabru::Temporal.ETAS(total.data = catalogue_rc,
+    fit_i <- ETAS.inlabru::Temporal.ETAS(total.data = cat_rc,
                                          M0 = M0,
                                          T1 = T_fit_start,
                                          T2 = T_fit_end,
@@ -198,7 +198,7 @@ for (k in seq_along(candidate_kernels)) {
                      M0 = M0,
                      T1 = T_fit_start,
                      T2 = T_fit_end,
-                     n_fit = nrow(catalogue_rc),
+                     n_fit = nrow(cat_rc),
                      binning_parameters = temporal_binning,
                      rel_tol = fit_control$rel_tol,
                      max_iter = fit_control$max_iter,
@@ -265,8 +265,5 @@ print(fit_manifest)
 
 write.csv(fit_manifest, file.path(ridgecrest_fit_dir, "fit_manifest.csv"),
           row.names = FALSE)
-
-writeLines(capture.output(sessionInfo()), 
-           file.path(ridgecrest_fit_dir, "sessionInfo.txt"))
 
 message("Finished Ridgecrest baseline fits.")

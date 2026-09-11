@@ -345,7 +345,7 @@ write.csv(fit_manifest, file.path(ridgecrest_fit_dir, "fit_manifest.csv"),
 # Add baseline M0 = 2.5 fits
 #-------------------------------------------------------------------------------
 
-baseline_fit_dir <- here("outputs", "ridgecrest", "fits", "baseline")
+baseline_fit_dir <- here("outputs", "ridgecrest", "baseline")
 
 baseline_summary <- catalogue_summary %>%
   filter(M0 == 2.5)

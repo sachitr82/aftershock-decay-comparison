@@ -19,10 +19,9 @@ future::plan(future::sequential)
 # Load fixed pilot catalogues (from 01)
 #-------------------------------------------------------------------------------
 
-pilot_files <- c(
-  ou = file.path(pilot_dir, "ou_pilot.rds"),
-  mse = file.path(pilot_dir, "mse_pilot.rds"),
-  rate_state = file.path(pilot_dir, "rate_state_pilot.rds"))
+pilot_files <- c(ou = file.path(pilot_dir, "ou_pilot.rds"),
+                 mse = file.path(pilot_dir, "mse_pilot.rds"),
+                 rate_state = file.path(pilot_dir, "rate_state_pilot.rds"))
 
 pilots <- lapply(pilot_files, readRDS)
 
@@ -43,16 +42,14 @@ rel_tol_schemes <- c(RT01 = 0.1, RT005 = 0.05, RT001 = 0.01)
 #-------------------------------------------------------------------------------
 
 rel_tol_index <- do.call(rbind, lapply(candidate_kernels, function(kernel) {
-  data.frame(
-    truth_kernel = kernel, fitted_kernel = kernel,
-    tolerance = names(rel_tol_schemes), stringsAsFactors = FALSE)
+  data.frame(truth_kernel = kernel, fitted_kernel = kernel,
+             tolerance = names(rel_tol_schemes), stringsAsFactors = FALSE)
 }))
 
 rownames(rel_tol_index) <- NULL
 
-stopifnot(
-  nrow(rel_tol_index) == 9,
-  all(rel_tol_index$truth_kernel == rel_tol_index$fitted_kernel))
+stopifnot(nrow(rel_tol_index) == 9,
+          all(rel_tol_index$truth_kernel == rel_tol_index$fitted_kernel))
 
 #-------------------------------------------------------------------------------
 # Output directory
@@ -104,10 +101,16 @@ for (i in seq_len(nrow(rel_tol_index))) {
     start_i <- Sys.time()
     
     fit_i <- ETAS.inlabru::Temporal.ETAS(
-      total.data = catalogue_i, M0 = M0, T1 = T_fit_start, T2 = T_fit_end,
-      link.functions = link_i, coef.t. = temporal_binning$coef.t,
-      delta.t. = temporal_binning$delta.t, N.max. = temporal_binning$N.max,
-      bru.opt = bru_i, kernel = fitted_i)
+      total.data = catalogue_i, 
+      M0 = M0, 
+      T1 = T_fit_start,
+      T2 = T_fit_end,
+      link.functions = link_i, 
+      coef.t. = temporal_binning$coef.t,
+      delta.t. = temporal_binning$delta.t, 
+      N.max. = temporal_binning$N.max,
+      bru.opt = bru_i, 
+      kernel = fitted_i)
     
     runtime_i <- as.numeric(difftime(Sys.time(), start_i, units = "mins"))
     
@@ -116,36 +119,34 @@ for (i in seq_len(nrow(rel_tol_index))) {
     hit_max_i <- any(grepl("Maximum iterations reached", log_i, fixed = TRUE))
     n_iter_i <- max(fit_i$bru_iinla$track$iteration, na.rm = TRUE)
     
-    saveRDS(list(
-      fit = fit_i,
-      link.functions = link_i,
-      truth_kernel = truth_i,
-      fitted_kernel = fitted_i,
-      tolerance = tolerance_i,
-      rel_tol = rel_tol_i,
-      binning_parameters = temporal_binning,
-      runtime_minutes = runtime_i,
-      converged = converged_i,
-      hit_max = hit_max_i,
-      n_iter = n_iter_i),
-      outfile_i)
-    
+    saveRDS(list(fit = fit_i,
+                 link.functions = link_i,
+                 truth_kernel = truth_i,
+                 fitted_kernel = fitted_i,
+                 tolerance = tolerance_i,
+                 rel_tol = rel_tol_i,
+                 binning_parameters = temporal_binning,
+                 runtime_minutes = runtime_i,
+                 converged = converged_i,
+                 hit_max = hit_max_i,
+                 n_iter = n_iter_i),
+                 outfile_i)
+              
     message("Saved ", basename(outfile_i),
             " | runtime = ", round(runtime_i, 2), " min")
   }
   
-  rel_tol_manifest[[i]] <- data.frame(
-    truth_kernel = truth_i,
-    fitted_kernel = fitted_i,
-    tolerance = tolerance_i,
-    rel_tol = rel_tol_i,
-    N_max = temporal_binning$N.max,
-    n_fit = nrow(catalogue_i),
-    runtime_minutes = runtime_i,
-    converged = converged_i,
-    hit_max = hit_max_i,
-    n_iter = n_iter_i,
-    file = basename(outfile_i))
+  rel_tol_manifest[[i]] <- data.frame(truth_kernel = truth_i,
+                                      fitted_kernel = fitted_i,
+                                      tolerance = tolerance_i,
+                                      rel_tol = rel_tol_i,
+                                      N_max = temporal_binning$N.max,
+                                      n_fit = nrow(catalogue_i),
+                                      runtime_minutes = runtime_i,
+                                      converged = converged_i,
+                                      hit_max = hit_max_i,
+                                      n_iter = n_iter_i,
+                                      file = basename(outfile_i))
 }
 
 #-------------------------------------------------------------------------------
