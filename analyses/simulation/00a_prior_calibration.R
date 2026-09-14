@@ -47,29 +47,29 @@ draws <- list(
 # Function to convert prior draw rows into temporal parameter lists
 #-------------------------------------------------------------------------------
 
-get_theta <- function(kernel, x, i) {
+get_theta <- function(form, x, i) {
   
-  if (kernel == "ou")
+  if (form == "ou")
     return(list(c = x$c[i], p = x$p[i]))
   
-  if (kernel == "mse")
+  if (form == "mse")
     return(list(d = x$d[i], rho = x$rho[i], gamma = x$gamma[i]))
   
-  if (kernel == "rate_state")
+  if (form == "rate_state")
     return(list(B = x$B[i], ta = x$ta[i]))
   
-  stop("Unknown temporal kernel.")
+  stop("Unknown temporal decay form.")
 }
 
 #-------------------------------------------------------------------------------
 # Function to calculate finite-window temporal mass G(0, T_obs)
 #-------------------------------------------------------------------------------
 
-calc_mass <- function(kernel, x) {
+calc_mass <- function(form, x) {
   
   vapply(seq_len(nrow(x)), function(i) {
-    ETAS.inlabru::temporal_kernel_integral(
-      a = 0, b = T_obs, theta = get_theta(kernel, x, i), kernel = kernel)
+    ETAS.inlabru::temporal_decay_integral(
+      a = 0, b = T_obs, theta = get_theta(form, x, i), form = form)
   }, numeric(1))
 }
 
@@ -126,7 +126,7 @@ write.csv(prior_summary, tablefile, row.names = FALSE)
 message("Saved ", tablefile)
 
 #-------------------------------------------------------------------------------
-# Function to evaluate complete temporal kernels
+# Function to evaluate complete temporal decay functions
 #-------------------------------------------------------------------------------
 
 idx_curve <- seq_len(n)
@@ -134,18 +134,18 @@ idx_curve <- seq_len(n)
 # Log-spaced time grid captures short- and long-time behaviour
 t_grid <- exp(seq(log(1e-4), log(T_obs), length.out = 500))
 
-calc_curves <- function(kernel, x, idx) {
+calc_curves <- function(form, x, idx) {
   
   vapply(idx, function(i) {
-    ETAS.inlabru::temporal_kernel(dt = t_grid,
-                                  theta = get_theta(kernel, x, i),
-                                  kernel = kernel)
+    ETAS.inlabru::temporal_decay(dt = t_grid,
+                                  theta = get_theta(form, x, i),
+                                  form = form)
   }, 
   numeric(length(t_grid)))
 }
 
 #-------------------------------------------------------------------------------
-# Evaluate raw temporal kernels g(t)
+# Evaluate raw temporal decay functions g(t)
 #-------------------------------------------------------------------------------
 
 g_plot <- list(ou = calc_curves("ou", draws$ou, idx_curve),
@@ -153,7 +153,7 @@ g_plot <- list(ou = calc_curves("ou", draws$ou, idx_curve),
                rate_state = calc_curves("rate_state", draws$rate_state, idx_curve))
 
 #-------------------------------------------------------------------------------
-# Normalise each kernel by its own fitting-window mass
+# Normalise each decay function by its own fitting-window mass
 # Integral_0^T h(t) dt = 1 for every prior draw
 #-------------------------------------------------------------------------------
 
@@ -164,7 +164,7 @@ h_plot <- list(
 )
 
 ##-------------------------------------------------------------------------------
-# Plot fitting-window-normalised temporal kernels
+# Plot fitting-window-normalised temporal decay functions
 #-------------------------------------------------------------------------------
 
 plot_prior_draws <- function(H, title) {

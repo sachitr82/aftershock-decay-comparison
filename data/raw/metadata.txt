@@ -1,7 +1,7 @@
 ================================================================================
 METADATA
-Project: A temporal Bayesian ETAS analysis of the 2019 Ridgecrest earthquake 
-sequence: comparing the Omori-Utsu and alternative aftershock decay functions
+Project: Comparing Aftershock Decay Functions for the 2019 Ridgecrest Earthquake 
+Sequence
 
 This file describes the raw dataset in this directory: what it contains and how
 to interpret it, the variables recorded (with units), when it was acquired, and 
@@ -11,40 +11,34 @@ where it came from.
 SUMMARY
 --------------------------------------------------------------------------------
 
-This dataset is an EARTHQUAKE CATALOGUE: a table with one row per detected
-seismic event, recording when and where each event occurred, how large it was,
-and how well its location and size were measured.
+This dataset is an EARTHQUAKE CATALOGUE: a table with one row per catalogued
+event, recording, alongside other catalogue attributes, when and where each event
+occurred and its magnitude.
 
 --------------------------------------------------------------------------------
 SOURCE
 --------------------------------------------------------------------------------
-Provider    : Southern California Earthquake Data Center (SCEDC), operated by 
-	      the California Institute of Technology (Caltech) Seismological
-	      Laboratory. The Southern California Seismic Network (SCSN) is
-	      operated jointly by Caltech and the United States Geological
-	      Survey (USGS).
-Catalogue   : Southern California Seismic Network (SCSN) catalogue,
-              obtained via the SCEDC catalog search.
-Obtained    : https://service.scedc.caltech.edu/eq-catalogs/date_mag_loc.php
-DOI         : doi:10.7909/C3WD3xH1
-Citations   :
-  Data      : SCEDC (2013): Southern California Earthquake Center. 
-	      Caltech. Dataset. doi:10.7909/C3WD3xH1
-  Network   : California Institute of Technology (Caltech) (1926): Southern
-              California Seismic Network. International Federation of Digital
-              Seismograph Networks. Other/Seismic Network. doi:10.7914/SN/CI
-Terms of Use:
-             "The SCEDC and SCSN are funded through U.S. Geological Survey 
-	      Grant G20AP00037, and the Southern California Earthquake Center,
-	      which is funded by NSF Cooperative Agreement EAR-0529922 and USGS
-              Cooperative Agreement 07HQAG0008."
+Provider       : Southern California Earthquake Data Center (SCEDC)
+Catalogue      : Southern California Seismic Network (SCSN) catalogue,
+                 obtained via the SCEDC catalog search.
+Source URL     : https://service.scedc.caltech.edu/eq-catalogs/date_mag_loc.php
+Citations   
+  Data         : SCEDC (2013): Southern California Earthquake Center. 
+	      	 Caltech. Dataset. doi:10.7909/C3WD3xH1
+  Network      : California Institute of Technology (Caltech) (1926): Southern
+              	 California Seismic Network. International Federation of Digital
+              	 Seismograph Networks. Other/Seismic Network. doi:10.7914/SN/CI
+Acknowledgement: "The SCEDC and SCSN are funded through U.S. Geological Survey 
+	      	 Grant G20AP00037, and the Southern California Earthquake 
+		 Center, which is funded by NSF Cooperative Agreement 
+		 EAR-0529922 and USGS Cooperative Agreement 07HQAG0008."
 
 --------------------------------------------------------------------------------
 FILE FORMAT
 --------------------------------------------------------------------------------
 
 Plain text, whitespace-delimited. The file begins with several non-data lines 
-(a title line, an html "<PRE>" tag, and a DOI line) and ends with a "</PRE>" tag.
+(a title line, an HTML "<PRE>" tag, and a DOI line) and ends with a "</PRE>" tag.
 Data rows are the lines beginning with a date (YYYY/MM/DD); a commented header 
 line precedes them. To read, keep only the date-initial lines and apply the 
 column names below (see `src/read_catalogue.R`).
@@ -53,14 +47,14 @@ column names below (see `src/read_catalogue.R`).
 DATA SET
 --------------------------------------------------------------------------------
 File          : 2026-07-23_scedc-scsn_socal_2016-2025_raw.txt
-Records	      : 249,899 events
-Description   : All SCSN seismic events in the
-                region latitude -90.0 to 90.0 N, longitude -180 to 180.0 E, 
+Records       : 249,899 events
+Description   : All SCSN catalogue events within the
+                region latitude -90.0 to 90.0 N, longitude -180.0 to 180.0 E, 
 		from 2016-01-01 00:00:00 to 2025-12-31 23:59:59 (UTC). 
 		Magnitude range -10.0 to 10.0; depth range -5.0 to 100.0 km. 
 		Event type: All (see ET below). 
-		Geographical type: All
-		This is the raw regional catalogue; it is later subset spatially 
+		Geographic type: All.
+		This is the raw catalogue extract; it is later subset spatially 
 		and temporally to the Ridgecrest sequence during analysis.
 Search parameters 
 (SCEDC catalog search):
@@ -76,7 +70,7 @@ Date acquired : 2026-07-23
 --------------------------------------------------------------------------------
 VARIABLES
 --------------------------------------------------------------------------------
-Column header row in the raw files:
+Column header row in the raw file:
   #YYY/MM/DD  HH:mm:SS.ss  ET  GT  MAG  M  LAT  LON  DEPTH  Q  EVID  NPH  NGRM
 
 (Definitions per the SCEDC catalog format specification, revised 2019-12-12, 
@@ -109,8 +103,7 @@ LAT        : latitude of the epicentre.                     (decimal degrees,
                                                                     + = north)
 LON        : longitude of the epicentre.                    (decimal degrees,
                                                                     - = west)
-DEPTH      : hypocentral depth (between Earth's surface     (kilometres)
-             and the exact point underground where the 
+DEPTH      : hypocentral depth (the depth at which the      (kilometres)
 	     event originated), positive downward, 
 	     measured relative to WGS84 reference ellipsoid.                
 Q          : reliability of the estimated event location.   (grade, unitless)

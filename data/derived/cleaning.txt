@@ -14,7 +14,7 @@ Selection:
 - Longitude: -118.2 to -117.0
 - Latitude: 35.2 to 36.4
 - Magnitude threshold: M >= 2.5
-- Full available temporal window retained (01-01-2016 00:00:00 to 31-12-2025 23:59:59)
+- Full available temporal window retained (2016-01-01 00:00:00 to 2025-12-31 23:59:59 UTC)
 
 Rows: 3339
 

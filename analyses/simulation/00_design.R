@@ -55,7 +55,7 @@ mu_true <- 0.074
 alpha_true <- 1.89
 
 #-------------------------------------------------------------------------------
-# Temporal kernel shape parameters
+# Temporal decay shape parameters
 #-------------------------------------------------------------------------------
 
 # Omori--Utsu (Ridgecrest-informed)
@@ -76,38 +76,38 @@ ta_true <- 188
 # boundary, while changing shape in time of that triggering
 #-------------------------------------------------------------------------------
 
-G_mainshock_obs_target <- ETAS.inlabru::temporal_kernel_integral(
-  a = 0, b = T_fit_end, theta = list(c = c_true, p = p_true), kernel = "ou")
+G_mainshock_obs_target <- ETAS.inlabru::temporal_decay_integral(
+  a = 0, b = T_fit_end, theta = list(c = c_true, p = p_true), form = "ou")
 
 rho_true <- uniroot(
   function(rho)  {
-    ETAS.inlabru::temporal_kernel_integral(
+    ETAS.inlabru::temporal_decay_integral(
       a = 0, b = T_fit_end,
-      theta = list(d = d_true, rho = rho,gamma = gamma_true),kernel = "mse") - 
+      theta = list(d = d_true, rho = rho,gamma = gamma_true), form = "mse") - 
       G_mainshock_obs_target
   },
   interval = c(1e-8, 100), tol = 1e-12)$root
 
 B_true <- uniroot(
   function(B)  {
-    ETAS.inlabru::temporal_kernel_integral(
+    ETAS.inlabru::temporal_decay_integral(
       a = 0, b = T_fit_end,
-      theta = list(B = B,ta = ta_true),kernel = "rate_state") - 
+      theta = list(B = B,ta = ta_true), form = "rate_state") - 
       G_mainshock_obs_target
   },
   interval = c(1e-8, 1 - 1e-10), tol = 1e-12)$root
 
 G_mainshock_obs <- c(
-  ou = ETAS.inlabru::temporal_kernel_integral(
-    a = 0, b = T_fit_end, theta = list(c = c_true, p = p_true),kernel = "ou"),
+  ou = ETAS.inlabru::temporal_decay_integral(
+    a = 0, b = T_fit_end, theta = list(c = c_true, p = p_true), form = "ou"),
   
-  mse = ETAS.inlabru::temporal_kernel_integral(
+  mse = ETAS.inlabru::temporal_decay_integral(
     a = 0, b = T_fit_end,
-    theta = list(d = d_true, rho = rho_true ,gamma = gamma_true),kernel = "mse"),
+    theta = list(d = d_true, rho = rho_true ,gamma = gamma_true), form = "mse"),
   
-  rate_state = ETAS.inlabru::temporal_kernel_integral(
+  rate_state = ETAS.inlabru::temporal_decay_integral(
     a = 0, b = T_fit_end, theta = list(B = B_true ,ta = ta_true),
-    kernel = "rate_state"))
+    form = "rate_state"))
 
 stopifnot(max(abs(G_mainshock_obs - G_mainshock_obs_target)) < 1e-6)
 
@@ -126,20 +126,20 @@ mean_productivity_multiplier <-
 }
 
 #-------------------------------------------------------------------------------
-# Lifetime temporal kernel masses
+# Lifetime temporal decay masses
 #-------------------------------------------------------------------------------
 
 G_inf <- c(
   
-  ou = ETAS.inlabru::temporal_kernel_total_mass(
+  ou = ETAS.inlabru::temporal_decay_total_mass(
     theta = list(c = c_true, p = p_true),
-    kernel = "ou"),
+    form = "ou"),
   
-  mse = ETAS.inlabru::temporal_kernel_total_mass(
-    theta = list(d = d_true, rho = rho_true,gamma = gamma_true), kernel = "mse"),
+  mse = ETAS.inlabru::temporal_decay_total_mass(
+    theta = list(d = d_true, rho = rho_true,gamma = gamma_true), form = "mse"),
   
-  rate_state = ETAS.inlabru::temporal_kernel_total_mass(
-    theta = list(B = B_true, ta = ta_true), kernel = "rate_state")
+  rate_state = ETAS.inlabru::temporal_decay_total_mass(
+    theta = list(B = B_true, ta = ta_true), form = "rate_state")
 )
 
 #-------------------------------------------------------------------------------
@@ -226,22 +226,22 @@ prior_calibration <- list(n_draws = 10000, T = T_fit_end,
 # Forward copula transformations:
 # internal N(0,1) scale -> physical ETAS parameter scale
 
-make_links_P0 <- function(kernel) {
+make_links_P0 <- function(form) {
   
-  stopifnot(kernel %in% c("ou", "mse", "rate_state"))
+  stopifnot(form %in% c("ou", "mse", "rate_state"))
   
   common <- list(
     mu = \(x) gamma_t(x, prior_baseline$mu$shape,prior_baseline$mu$rate),
     K = \(x) loggaus_t(x, prior_baseline$K$meanlog, prior_baseline$K$sdlog),
     alpha = \(x) gamma_t(x, prior_baseline$alpha$shape, prior_baseline$alpha$rate))
   
-  if (kernel == "ou") {
+  if (form == "ou") {
     return(c(common,list(
       c_ = \(x) unif_t(x, prior_baseline$ou$c$min, prior_baseline$ou$c$max),
       p = \(x) unif_t(x, prior_baseline$ou$p$min, prior_baseline$ou$p$max))))
   }
   
-  if (kernel == "mse") {
+  if (form == "mse") {
     return(c(common, list(
       d = \(x) unif_t(x, prior_baseline$mse$d$min, prior_baseline$mse$d$max),
       rho = \(x) loggaus_t(x, prior_baseline$mse$rho$meanlog, 
@@ -250,7 +250,7 @@ make_links_P0 <- function(kernel) {
                           prior_baseline$mse$gamma$max))))
   }
   
-  if (kernel == "rate_state") {
+  if (form == "rate_state") {
     return(c(common, list(
       B = \(x) logitgaus_t(x, prior_baseline$rate_state$B$mean, 
                            prior_baseline$rate_state$B$sd),
@@ -264,9 +264,9 @@ make_links_P0 <- function(kernel) {
 # physical ETAS parameter scale -> internal N(0,1) scale
 #-------------------------------------------------------------------------------
 
-make_inverse_links_P0 <- function(kernel) {
+make_inverse_links_P0 <- function(form) {
   
-  stopifnot(kernel %in% c("ou", "mse", "rate_state"))
+  stopifnot(form %in% c("ou", "mse", "rate_state"))
   
   common <- list(
     mu = \(x) inv_gamma_t(x, prior_baseline$mu$shape, prior_baseline$mu$rate),
@@ -276,14 +276,14 @@ make_inverse_links_P0 <- function(kernel) {
     alpha = \(x) inv_gamma_t(x, prior_baseline$alpha$shape, prior_baseline$alpha$rate))
   
   
-  if (kernel == "ou") {
+  if (form == "ou") {
     return(c(common, list(
       c_ = \(x) inv_unif_t(x,  prior_baseline$ou$c$min, prior_baseline$ou$c$max),
       p = \(x) inv_unif_t(x, prior_baseline$ou$p$min, prior_baseline$ou$p$max))))
   }
   
   
-  if (kernel == "mse") {
+  if (form == "mse") {
     return(c(common, list( 
       d = \(x) inv_unif_t(x,  prior_baseline$mse$d$min, prior_baseline$mse$d$max),
       rho = \(x) inv_loggaus_t(x, prior_baseline$mse$rho$meanlog,
@@ -292,7 +292,7 @@ make_inverse_links_P0 <- function(kernel) {
                               prior_baseline$mse$gamma$max))))
   }
   
-  if (kernel == "rate_state") { 
+  if (form == "rate_state") { 
     return(c(common, list(
       B = \(x) inv_logitgaus_t(x, prior_baseline$rate_state$B$mean,
                                prior_baseline$rate_state$B$sd),
@@ -305,14 +305,14 @@ make_inverse_links_P0 <- function(kernel) {
 # inlabru fitting options under baseline priors
 #-------------------------------------------------------------------------------
 
-make_bru_options_P0 <- function(kernel, rel_tol = 0.1, max_iter = 100) {
+make_bru_options_P0 <- function(form, rel_tol = 0.1, max_iter = 100) {
   
-  stopifnot(kernel %in% c("ou", "mse", "rate_state"))
+  stopifnot(form %in% c("ou", "mse", "rate_state"))
   
-  inv <- make_inverse_links_P0(kernel)
-  init <- initials[[kernel]]
+  inv <- make_inverse_links_P0(form)
+  init <- initials[[form]]
   
-  if (kernel == "ou") {
+  if (form == "ou") {
     th_init <- list(
       th.mu = inv$mu(init["mu"]),
       th.K = inv$K(init["K"]),
@@ -321,7 +321,7 @@ make_bru_options_P0 <- function(kernel, rel_tol = 0.1, max_iter = 100) {
       th.p = inv$p(init["p"]))
   }
   
-  if (kernel == "mse") {
+  if (form == "mse") {
     th_init <- list(
       th.mu = inv$mu(init["mu"]),
       th.K = inv$K(init["K"]),
@@ -331,7 +331,7 @@ make_bru_options_P0 <- function(kernel, rel_tol = 0.1, max_iter = 100) {
       th.gamma = inv$gamma(init["gamma"]))
   }
   
-  if (kernel == "rate_state") {
+  if (form == "rate_state") {
     th_init <- list(
       th.mu = inv$mu(init["mu"]),
       th.K = inv$K(init["K"]),
@@ -365,11 +365,11 @@ pilot_seeds <- c(ou = 900001, mse = 900002, rate_state = 900003)
 
 sim_index <- rbind(
   
-  data.frame(kernel = "ou", rep = 1:n_rep, seed = 1001:(1000 + n_rep)),
+  data.frame(form = "ou", rep = 1:n_rep, seed = 1001:(1000 + n_rep)),
   
-  data.frame(kernel = "mse", rep = 1:n_rep,seed = 2001:(2000 + n_rep)),
+  data.frame(form = "mse", rep = 1:n_rep,seed = 2001:(2000 + n_rep)),
   
-  data.frame(kernel = "rate_state", rep = 1:n_rep,seed = 3001:(3000 + n_rep))
+  data.frame(form = "rate_state", rep = 1:n_rep,seed = 3001:(3000 + n_rep))
 )
 
 #-------------------------------------------------------------------------------
