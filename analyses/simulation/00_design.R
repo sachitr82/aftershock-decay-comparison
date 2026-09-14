@@ -19,7 +19,7 @@ M0 <- 2.5
 Mmax <- 7.1
 
 # Ridgecrest b-value (obtained from EDA)
-b_true <- 0.793967
+b_true <- 0.8651403
 beta_true <- b_true * log(10)
 
 #-------------------------------------------------------------------------------
@@ -29,13 +29,13 @@ beta_true <- b_true * log(10)
 mainshock_date <- as.Date("2019-07-06")
 
 fit_start_date <- as.Date("2016-01-01")
+fit_end_date <- as.Date("2026-01-01")
 
 # Convert dates to days relative to mainshock
-
 T_fit_start <- as.numeric(fit_start_date - mainshock_date)
 
 # Full Ridgecrest post-mainshock observation window
-T_fit_end <- 2371
+T_fit_end <- as.numeric(fit_end_date - mainshock_date)
 
 #-------------------------------------------------------------------------------
 # Imposed Ridgecrest-like mainshock
@@ -49,16 +49,16 @@ mainshock_event <- data.frame(ts = 0, magnitudes = 7.1)
 
 # Empirically Ridgecrest pre-foreshock total event rate used as a simulation
 # background-rate anchor. Not a direct estimate of mu.
-mu_true <- 0.074
+mu_true <- 0.073
 
-# Ridgecrest-informed anchor
+# Ridgecrest-informed anchor from the 100-day analysis of Kamranzad et al. (2025)
 alpha_true <- 1.89
 
 #-------------------------------------------------------------------------------
 # Temporal decay shape parameters
 #-------------------------------------------------------------------------------
 
-# Omori--Utsu (Ridgecrest-informed)
+# Ridgecrest-informed anchors from the 100-day analysis of Kamranzad et al. (2025)
 c_true <- 0.03
 p_true <- 1.17
 
@@ -199,25 +199,18 @@ prior_baseline <- list(
   K = list(dist = "lognormal", meanlog = -1, sdlog = 0.5),
   alpha = list(dist = "gamma", shape = 1, rate = 0.5),
   
-  ou = list(
-    c = list(dist = "uniform", min = bound_eps, max = 1),
-    p = list(dist = "uniform", min = 1 + bound_eps, max = 2)
-  ),
+  ou = list(c = list(dist = "uniform", min = bound_eps, max = 1),
+            p = list(dist = "uniform", min = 1 + bound_eps, max = 2)),
   
-  mse = list(
-    d = list(dist = "uniform", min = bound_eps, max = 1),
-    rho = list(dist = "lognormal", meanlog = log(1.5), sdlog = 1),
-    gamma = list(dist = "uniform", min = bound_eps, max = 1 - bound_eps)
-  ),
+  mse = list(d = list(dist = "uniform", min = bound_eps, max = 1),
+             rho = list(dist = "lognormal", meanlog = log(1.5), sdlog = 1),
+             gamma = list(dist = "uniform", min = bound_eps, max = 1 - bound_eps)),
   
-  rate_state = list(
-    B = list(dist = "logit_normal", mean = 7.5, sd = 1),
-    ta = list(dist = "lognormal", meanlog = log(200), sdlog = 0.5)
-  )
+  rate_state = list( B = list(dist = "logit_normal", mean = 7.5, sd = 1),
+                     ta = list(dist = "lognormal", meanlog = log(200), sdlog = 0.5))
 )
 
-prior_calibration <- list(n_draws = 10000, T = T_fit_end,
-                          seed = 800001)
+prior_calibration <- list(n_draws = 10000, T = T_fit_end, seed = 800001)
 
 #-------------------------------------------------------------------------------
 # Fixed baseline priors
@@ -313,31 +306,28 @@ make_bru_options_P0 <- function(form, rel_tol = 0.1, max_iter = 100) {
   init <- initials[[form]]
   
   if (form == "ou") {
-    th_init <- list(
-      th.mu = inv$mu(init["mu"]),
-      th.K = inv$K(init["K"]),
-      th.alpha = inv$alpha(init["alpha"]),
-      th.c = inv$c_(init["c"]),
-      th.p = inv$p(init["p"]))
+    th_init <- list(th.mu = inv$mu(init["mu"]),
+                    th.K = inv$K(init["K"]),
+                    th.alpha = inv$alpha(init["alpha"]),
+                    th.c = inv$c_(init["c"]),
+                    th.p = inv$p(init["p"]))
   }
   
   if (form == "mse") {
-    th_init <- list(
-      th.mu = inv$mu(init["mu"]),
-      th.K = inv$K(init["K"]),
-      th.alpha = inv$alpha(init["alpha"]),
-      th.d = inv$d(init["d"]),
-      th.rho = inv$rho(init["rho"]),
-      th.gamma = inv$gamma(init["gamma"]))
+    th_init <- list(th.mu = inv$mu(init["mu"]),
+                    th.K = inv$K(init["K"]),
+                    th.alpha = inv$alpha(init["alpha"]),
+                    th.d = inv$d(init["d"]),
+                    th.rho = inv$rho(init["rho"]),
+                    th.gamma = inv$gamma(init["gamma"]))
   }
   
   if (form == "rate_state") {
-    th_init <- list(
-      th.mu = inv$mu(init["mu"]),
-      th.K = inv$K(init["K"]),
-      th.alpha = inv$alpha(init["alpha"]),
-      th.B = inv$B(init["B"]),
-      th.ta = inv$ta(init["ta"]))
+    th_init <- list(th.mu = inv$mu(init["mu"]),
+                    th.K = inv$K(init["K"]),
+                    th.alpha = inv$alpha(init["alpha"]),
+                    th.B = inv$B(init["B"]),
+                    th.ta = inv$ta(init["ta"]))
   }
   
   list(bru_verbose = 0, bru_max_iter = max_iter, 
