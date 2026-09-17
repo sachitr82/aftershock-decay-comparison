@@ -1,7 +1,7 @@
 #===============================================================================
 # Misspecification diagnostics (why no RS fits to MSE truth converged)
 # NOTE: This script performs 20 targeted RS refits and writes approximately
-# 200 MB of fitted model objects to disk.
+# 200 MB of fitted model objects to disk. Takes 2-4 hours to run
 #===============================================================================
 
 #-------------------------------------------------------------------------------
