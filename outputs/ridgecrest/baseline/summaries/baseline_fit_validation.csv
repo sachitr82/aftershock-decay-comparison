@@ -1,4 +1,0 @@
-"fitted_kernel","converged","hit_max","inla_failure","nan_inf_logl","vb_aborted","n_iter","n_degenerate","posterior_valid","lml","lml_valid","usable"
-"ou",TRUE,FALSE,FALSE,FALSE,FALSE,59,0,TRUE,-12576.6619648042,TRUE,TRUE
-"mse",TRUE,FALSE,FALSE,FALSE,FALSE,54,0,TRUE,-12580.1751203538,TRUE,TRUE
-"rate_state",TRUE,FALSE,FALSE,FALSE,FALSE,58,0,TRUE,-12673.2734098875,TRUE,TRUE

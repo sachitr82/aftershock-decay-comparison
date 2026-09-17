@@ -1,7 +1,7 @@
 #===============================================================================
-# Comparison of generating temporal triggering functions
+# Comparison of generating temporal decay functions
 #
-#   (a) unnormalised temporal triggering functions g_k(t)         [log-log]
+#   (a) unnormalised temporal decay functions g_k(t)              [log-log]
 #   (b) cumulative triggering masses G_k(0,t)                     [log-x]
 #===============================================================================
 
@@ -9,9 +9,11 @@
 # Load packages and fixed simulation design
 #-------------------------------------------------------------------------------
 
+library(ETAS.inlabru)
 library(ggplot2)
 library(here)
 library(patchwork)
+library(scales)
 source(here("analyses", "simulation", "00_design.R"))
 
 #-------------------------------------------------------------------------------
@@ -36,23 +38,23 @@ t_grid <- sort(unique(c(10^seq(-4, log10(t_plot_max), length.out = 3000), T_fit_
 ## Evaluate g_k(t)
 #-------------------------------------------------------------------------------
 
-g_ou <- ETAS.inlabru::temporal_kernel(dt = t_grid, theta = theta_ou, 
-                                      kernel = "ou")
+g_ou <- ETAS.inlabru::temporal_decay(dt = t_grid, theta = theta_ou, 
+                                      form = "ou")
 
-g_mse <- ETAS.inlabru::temporal_kernel(dt = t_grid, theta = theta_mse, 
-                                       kernel = "mse")
+g_mse <- ETAS.inlabru::temporal_decay(dt = t_grid, theta = theta_mse, 
+                                       form = "mse")
 
-g_rs <- ETAS.inlabru::temporal_kernel(dt = t_grid, theta = theta_rs, 
-                                      kernel = "rate_state")
+g_rs <- ETAS.inlabru::temporal_decay(dt = t_grid, theta = theta_rs, 
+                                      form = "rate_state")
 
 #-------------------------------------------------------------------------------
 ## Evaluate G_k(0,t)
 #-------------------------------------------------------------------------------
 
-cum_mass <- function(t, theta, kernel) {
+cum_mass <- function(t, theta, form) {
   vapply(t, function(tt) {
-      ETAS.inlabru::temporal_kernel_integral(a = 0, b = tt, theta = theta,
-                                             kernel = kernel)
+      ETAS.inlabru::temporal_decay_integral(a = 0, b = tt, theta = theta,
+                                             form = form)
     },numeric(1))
 }
 
@@ -64,26 +66,25 @@ G_rs <- cum_mass(t_grid, theta_rs, "rate_state")
 # Assemble plotting data
 #-------------------------------------------------------------------------------
 
-kernel_levels <- c(
-  "Omori\u2013Utsu",
-  "Modified stretched exponential",
-  "Rate-state")
+decay_levels <- c("Omori\u2013Utsu",
+                  "Modified stretched exponential",
+                  "Rate-state")
 
-kern <- rbind(
-  data.frame(t = t_grid, kernel = kernel_levels[1], g = g_ou, G = G_ou),
-  data.frame( t = t_grid, kernel = kernel_levels[2], g = g_mse, G = G_mse),
-  data.frame(t = t_grid, kernel = kernel_levels[3], g = g_rs, G = G_rs)
+dec <- rbind(
+  data.frame(t = t_grid, decay = decay_levels[1], g = g_ou, G = G_ou),
+  data.frame( t = t_grid, decay = decay_levels[2], g = g_mse, G = G_mse),
+  data.frame(t = t_grid, decay = decay_levels[3], g = g_rs, G = G_rs)
 )
 
-kern$kernel <- factor(kern$kernel, levels = kernel_levels)
+dec$decay <- factor(dec$decay, levels = decay_levels)
 
 #-------------------------------------------------------------------------------
 # Plotting parameters
 #-------------------------------------------------------------------------------
 
-kernel_cols <- setNames(c("steelblue", "orange", "springgreen4"), kernel_levels)
+decay_cols <- setNames(c("steelblue", "orange", "springgreen4"), decay_levels)
 
-kernel_lty <- setNames(c("solid", "dashed", "dotted"), kernel_levels)
+decay_lty <- setNames(c("solid", "dashed", "dotted"), decay_levels)
 
 log_lab <- scales::trans_format("log10", scales::math_format(10^.x))
 
@@ -101,16 +102,16 @@ x_scale <- scale_x_log10(breaks = 10^seq(-4, 4, by = 1), labels = log_lab,
                          expand = expansion(mult = 0))
 
 #-------------------------------------------------------------------------------
-## Panel (a): unnormalised temporal triggering functions
+## Panel (a): unnormalised temporal decay functions
 #-------------------------------------------------------------------------------
 
-p_trigger <- ggplot(kern, aes(t, g, colour = kernel, linetype = kernel)) +
+p_trigger <- ggplot(dec, aes(t, g, colour = decay, linetype = decay)) +
   geom_line(linewidth = 0.9) +
   x_scale +
   scale_y_log10(breaks = 10^seq(-12, 0, by = 2), labels = log_lab) +
   coord_cartesian(ylim = c(1e-12, 1)) + 
-  scale_colour_manual(values = kernel_cols) +
-  scale_linetype_manual(values = kernel_lty) +
+  scale_colour_manual(values = decay_cols) +
+  scale_linetype_manual(values = decay_lty) +
   labs(x = "Time since triggering event (days)", y = expression(g[k](t))) +
   base_theme
 
@@ -118,13 +119,13 @@ p_trigger <- ggplot(kern, aes(t, g, colour = kernel, linetype = kernel)) +
 # Panel (b): cumulative integrated triggering mass
 #-------------------------------------------------------------------------------
 
-p_mass <- ggplot(kern, aes(t, G, colour = kernel, linetype = kernel)) +
+p_mass <- ggplot(dec, aes(t, G, colour = decay, linetype = decay)) +
   geom_line(linewidth = 0.9) +
   geom_vline(xintercept = T_fit_end, linetype = "longdash", linewidth = 0.45) +
   x_scale +
   scale_y_continuous(expand = expansion(mult = c(0, 0.04))) +
-  scale_colour_manual(values = kernel_cols) +
-  scale_linetype_manual(values = kernel_lty) +
+  scale_colour_manual(values = decay_cols) +
+  scale_linetype_manual(values = decay_lty) +
   labs(x = "Time since triggering event (days)", y = expression(G[k](0,t))) +
   base_theme
 
@@ -139,28 +140,13 @@ fig <- (p_trigger | p_mass) +
   theme(legend.position = "bottom",
         plot.tag = element_text(size = 10, face = "plain"))
 
-print(fig)
-
-#-------------------------------------------------------------------------------
-# Report matched finite-window mass and lifetime masses
-#-------------------------------------------------------------------------------
-
-G_inf_plot <- c(
-  ou = ETAS.inlabru::temporal_kernel_total_mass(theta = theta_ou,kernel = "ou"),
-  mse = ETAS.inlabru::temporal_kernel_total_mass(theta = theta_mse,kernel = "mse"),
-  rate_state = ETAS.inlabru::temporal_kernel_total_mass(theta = theta_rs, 
-                                                        kernel = "rate_state")
-)
-
-print(G_inf_plot)
-
 #-------------------------------------------------------------------------------
 # Save figure
 #-------------------------------------------------------------------------------
 
-fig_dir <- here("outputs", "simulation", "figures")
+figfile <- file.path(design_figure_dir, "synthetic-decay-design.pdf")
 
-dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
-
-ggsave(filename = here(fig_dir, "synthetic-triggering-design.pdf"), plot = fig,
+ggsave(filename = figfile, plot = fig,
        width = 7, height = 3.5)
+
+message("Saved ", figfile)

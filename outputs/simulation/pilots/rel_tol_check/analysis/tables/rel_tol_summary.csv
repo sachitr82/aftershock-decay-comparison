@@ -1,0 +1,4 @@
+"tolerance","n_fits","n_usable","n_converged","n_hit_max","n_degenerate","n_inla_failure","n_vb_aborted","n_nan_inf_logl","median_iter","max_iter","median_iter_diff","median_runtime","max_runtime","median_runtime_ratio"
+"RT01",3,3,3,0,0,0,0,0,26,26,0,1.24224356412888,1.53108606735865,1
+"RT005",3,3,3,0,0,0,0,0,31,31,5,1.38962188164393,1.78075776894887,1.16306836494237
+"RT001",3,3,3,0,0,0,0,0,42,43,16,1.94541903336843,2.64652206897736,1.56605281729324

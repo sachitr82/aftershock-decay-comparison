@@ -15,49 +15,40 @@ library(patchwork)
 source(here("analyses", "simulation", "00_design.R"))
 
 #-------------------------------------------------------------------------------
-# Directories
+# Labels
 #-------------------------------------------------------------------------------
 
-main_fit_dir <- file.path(fit_dir, "main_simulation")
-comparison_dir <- file.path(main_fit_dir, "model_discrimination")
-figure_dir <- file.path(comparison_dir, "figures")
+candidate_forms <- c("ou", "mse", "rate_state")
 
-dir.create(comparison_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
-
-candidate_kernels <- c("ou", "mse", "rate_state")
-
-kernel_labels <- c(ou = "OU", mse = "MSE", rate_state = "RS")
+form_labels <- c(ou = "OU", mse = "MSE", rate_state = "RS")
 
 #-------------------------------------------------------------------------------
 # Load fit manifest
 #-------------------------------------------------------------------------------
 
-fit_manifest <- read.csv(file.path(main_fit_dir, "fit_manifest.csv"),
+fit_manifest <- read.csv(file.path(fit_dir, "fit_manifest.csv"),
                          stringsAsFactors = FALSE)
 
 fit_manifest$fit_file <- file.path(
-  main_fit_dir, paste0("truth_", fit_manifest$truth_kernel), fit_manifest$file)
+  fit_dir, paste0("truth_", fit_manifest$truth_form), fit_manifest$file)
 
 stopifnot(nrow(fit_manifest) == 900)
-
-fit_manifest <- fit_manifest %>%
-  mutate(usable = converged & !hit_max & !degenerate & !vb_aborted & 
-           !inla_failure & !nan_inf_logl)
 
 message("Usable fits: ", sum(fit_manifest$usable, na.rm = TRUE), 
         "/", nrow(fit_manifest))
 
 #-------------------------------------------------------------------------------
-# Extract INLA model-comparison quantities (full DIC breakdown)
+# Extract DIC and log marginal likelihood from usable fits
 #-------------------------------------------------------------------------------
 
+# Helper for extracting log marginal likelihood
 extract_mlik <- function(fit, type = c("integration", "Gaussian")) {
   
   type <- match.arg(type)
   
+  # NA if no marginal likelihood returned
   if (is.null(fit$mlik)) return(NA_real_)
-  
+
   rn <- rownames(fit$mlik)
   if (is.null(rn)) return(NA_real_)
   
@@ -77,46 +68,24 @@ for (i in seq_len(nrow(usable_manifest))) {
   
   row_i <- usable_manifest[i, ]
   
-  message(i, "/", nrow(usable_manifest), " | truth ", row_i$truth_kernel, 
-          " | fit ", row_i$fitted_kernel, " | rep ", row_i$rep)
+  message(i, "/", nrow(usable_manifest), " | truth ", row_i$truth_form, 
+          " | fit ", row_i$fitted_form, " | rep ", row_i$rep)
   
   obj_i <- readRDS(row_i$fit_file)
   fit_i <- obj_i$fit
   
-  score_rows[[i]] <- data.frame(truth_kernel = row_i$truth_kernel,
-                                fitted_kernel = row_i$fitted_kernel,
+  score_rows[[i]] <- data.frame(truth_form = row_i$truth_form,
+                                fitted_form = row_i$fitted_form,
                                 rep = row_i$rep,
-    
-    dic = if (!is.null(fit_i$dic$dic)) {
-      as.numeric(fit_i$dic$dic)
-    } else {
-      NA_real_
-    },
-    mean_deviance = if (!is.null(fit_i$dic$mean.deviance)) {
-      as.numeric(fit_i$dic$mean.deviance)
-    } else {
-      NA_real_
-    },
-
-    p_eff = if (!is.null(fit_i$dic$p.eff)) {
-      as.numeric(fit_i$dic$p.eff)
-    } else {
-      NA_real_
-    },
-    
-    lml_integration = extract_mlik(fit_i, "integration"),
-    lml_gaussian = extract_mlik(fit_i, "Gaussian")
-  )
+                                dic = if (!is.null(fit_i$dic$dic)) {
+                                  as.numeric(fit_i$dic$dic)
+                                } else {
+                                  NA_real_
+                                },
+                                lml = extract_mlik(fit_i, "integration"))
 }
 
-model_scores_full <- bind_rows(score_rows)
-
-#-------------------------------------------------------------------------------
-# Retain criteria used for model discrimination (both LMLs agree, retain one)
-#-------------------------------------------------------------------------------
-
-model_scores <- model_scores_full %>%
-  select(truth_kernel, fitted_kernel, rep, dic, lml = lml_integration)
+model_scores <- bind_rows(score_rows)
 
 #-------------------------------------------------------------------------------
 # Make all criteria share orientation (higher = better, DIC becomes -DIC)
@@ -135,22 +104,22 @@ make_decisions <- function(dat, candidates, truths = candidates) {
   
   # Retain only candidate models
   comparison_data <- dat %>%
-    filter(truth_kernel %in% truths, fitted_kernel %in% candidates)
+    filter(truth_form %in% truths, fitted_form %in% candidates)
   
-  # Remove catalogues with infinite score and which don't have all required fits
-  # to compare
+  # Retain catalogues with finite scores for all required fits
   eligible <- comparison_data %>%
-    group_by(truth_kernel, rep, criterion) %>%
-    summarise(n_models = n_distinct(fitted_kernel),
+    group_by(truth_form, rep, criterion) %>%
+    summarise(n_models = n_distinct(fitted_form),
       all_finite = all(is.finite(oriented_score)),
       .groups = "drop") %>%
     filter(n_models == length(candidates), all_finite)
   
   comparison_data <- comparison_data %>%
-    inner_join(eligible %>% select(truth_kernel, rep, criterion),
-               by = c("truth_kernel", "rep", "criterion"))
+    inner_join(eligible %>% select(truth_form, rep, criterion),
+               by = c("truth_form", "rep", "criterion"))
   
-  keys <- comparison_data %>% distinct(truth_kernel, rep, criterion)
+  # Find winning model
+  keys <- comparison_data %>% distinct(truth_form, rep, criterion)
   
   decision_rows <- vector("list", nrow(keys))
   
@@ -159,31 +128,23 @@ make_decisions <- function(dat, candidates, truths = candidates) {
     key_j <- keys[j, ]
     
     d <- comparison_data %>%
-      filter(truth_kernel == key_j$truth_kernel,
+      filter(truth_form == key_j$truth_form,
              rep == key_j$rep, criterion == key_j$criterion)
     
+    # Find best score
     best_score <- max(d$oriented_score)
     
+    # Check there isn't a tie
     stopifnot(sum(d$oriented_score == best_score) == 1)
     
+    # Identify winner
     best_idx <- which.max(d$oriented_score)
+    selected_form <- d$fitted_form[best_idx]
     
-    selected_kernel <- d$fitted_kernel[best_idx]
-    
-    truth_score <- d$oriented_score[d$fitted_kernel == key_j$truth_kernel]
-    
-    wrong_scores <- d$oriented_score[d$fitted_kernel != key_j$truth_kernel]
-    
-    truth_margin <- truth_score - max(wrong_scores)
-    
-    decision_rows[[j]] <- data.frame(
-      truth_kernel = key_j$truth_kernel,
-      rep = key_j$rep,
-      criterion = key_j$criterion,
-      selected_kernel = selected_kernel,
-      truth_margin = truth_margin,
-      correct = selected_kernel == key_j$truth_kernel
-    )
+    decision_rows[[j]] <- data.frame(truth_form = key_j$truth_form,
+                                     rep = key_j$rep,
+                                     criterion = key_j$criterion,
+                                     selected_form = selected_form)
   }
   
   bind_rows(decision_rows)
@@ -193,23 +154,11 @@ make_decisions <- function(dat, candidates, truths = candidates) {
 # Three-way discrimination: OU vs MSE vs RS
 #-------------------------------------------------------------------------------
 
-three_way <- make_decisions(score_long, candidates = candidate_kernels, 
-                            truths = candidate_kernels)
-
-# Check eligible catalogue counts
-three_way_n <- three_way %>%
-  count(criterion, truth_kernel, name = "n_eligible")
-
-print(three_way_n)
-
-#-------------------------------------------------------------------------------
-# Three-way selection proportions
-#-------------------------------------------------------------------------------
-
-three_way_selection <- three_way %>%
-  count(criterion, truth_kernel, selected_kernel, name = "n_selected") %>%
-  group_by(criterion, truth_kernel) %>%
-  complete(selected_kernel = candidate_kernels,
+three_way_selection <- make_decisions(score_long, candidates = candidate_forms,
+                                      truths = candidate_forms) %>%
+  count(criterion, truth_form, selected_form, name = "n_selected") %>%
+  group_by(criterion, truth_form) %>%
+  complete(selected_form = candidate_forms,
            fill = list(n_selected = 0)) %>%
   mutate(n_eligible = sum(n_selected),
          proportion = n_selected / n_eligible) %>%
@@ -217,11 +166,11 @@ three_way_selection <- three_way %>%
 
 three_way_selection_compact <- three_way_selection %>%
   filter(n_selected > 0) %>%
-  select(criterion, truth_kernel, selected_kernel,
+  select(criterion, truth_form, selected_form,
          n_selected, n_eligible, proportion)
 
 write.csv(three_way_selection_compact,
-          file.path(comparison_dir, "three_way_selection.csv"),
+          file.path(model_discrimination_table_dir, "three_way_selection.csv"),
           row.names = FALSE)
 
 #-------------------------------------------------------------------------------
@@ -230,18 +179,18 @@ write.csv(three_way_selection_compact,
 
 # Extract criterion values from the correctly specified fit for each catalogue
 truth_scores <- model_scores %>%
-  filter(fitted_kernel == truth_kernel) %>%
-  select(truth_kernel, rep, dic, lml) %>%
+  filter(fitted_form == truth_form) %>%
+  select(truth_form, rep, dic, lml) %>%
   rename(dic_truth = dic, lml_truth = lml)
 
 # Match each misspecified fit to the correct fit for the same catalogue
 pairwise_differences <- model_scores %>%
-  filter(fitted_kernel != truth_kernel) %>%
-  select(truth_kernel, fitted_kernel, rep, dic, lml) %>%
-  rename(competitor_kernel = fitted_kernel,
+  filter(fitted_form != truth_form) %>%
+  select(truth_form, fitted_form, rep, dic, lml) %>%
+  rename(competitor_form = fitted_form,
          dic_competitor = dic,
          lml_competitor = lml) %>%
-  inner_join(truth_scores, by = c("truth_kernel", "rep")) %>%
+  inner_join(truth_scores, by = c("truth_form", "rep")) %>%
   mutate(delta_dic = dic_competitor - dic_truth,
          delta_lml = lml_truth - lml_competitor)
 
@@ -250,20 +199,21 @@ pairwise_differences <- model_scores %>%
 #-------------------------------------------------------------------------------
 
 pairwise_differences_long <- pairwise_differences %>%
-  select(truth_kernel, competitor_kernel, rep, delta_dic, delta_lml) %>%
+  select(truth_form, competitor_form, rep, delta_dic, delta_lml) %>%
   pivot_longer(cols = c(delta_dic, delta_lml),
                names_to = "criterion", values_to = "delta") %>%
   mutate(criterion = recode(criterion, delta_dic = "DIC", delta_lml = "LML"),
-         truth_label = kernel_labels[truth_kernel],
-         competitor_label = kernel_labels[competitor_kernel],
+         truth_label = form_labels[truth_form],
+         competitor_label = form_labels[competitor_form],
          comparison = paste0(truth_label, " truth vs ", competitor_label)) %>%
   filter(is.finite(delta))
+
 #-------------------------------------------------------------------------------
 # Pair-specific summaries
 #-------------------------------------------------------------------------------
 
 pairwise_difference_summary <- pairwise_differences_long %>%
-  group_by(criterion, truth_kernel, competitor_kernel, comparison) %>%
+  group_by(criterion, truth_form, competitor_form, comparison) %>%
   summarise(n = n(),
             n_truth_favoured = sum(delta > 0),
             prop_truth_favoured = mean(delta > 0),
@@ -272,10 +222,9 @@ pairwise_difference_summary <- pairwise_differences_long %>%
             q90_delta = quantile(delta, 0.90),
             .groups = "drop")
 
-print(pairwise_difference_summary)
-
 write.csv(pairwise_difference_summary,
-          file.path(comparison_dir, "pairwise_criterion_difference_summary.csv"),
+          file.path(model_discrimination_table_dir,
+                    "pairwise_criterion_difference_summary.csv"),
           row.names = FALSE)
 
 #-------------------------------------------------------------------------------
@@ -361,41 +310,27 @@ p_comparison <- (p_dic | p_lml) +
   plot_layout(axes = "collect_y") + 
   plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")")
 
-print(p_comparison)
-
-ggsave(file.path(figure_dir, "pairwise_model_comparison.pdf"), p_comparison,
-       width = 12, height = 4.5)
+ggsave(file.path(model_discrimination_figure_dir,
+                 "pairwise_model_comparison.pdf"),
+       p_comparison, width = 12, height = 4.5)
 
 #-------------------------------------------------------------------------------
-# Identify marginal-likelihood misclassifications
+# When LML gets it wrong
 #-------------------------------------------------------------------------------
-
 lml_errors <- pairwise_differences %>%
   filter(is.finite(delta_lml), delta_lml < 0) %>%
-  mutate(bf_truth_vs_alt = exp(delta_lml), bf_alt_vs_truth = exp(-delta_lml)) %>%
-  select(truth_kernel, competitor_kernel, rep, delta_lml,
+  mutate(bf_truth_vs_alt = exp(delta_lml),
+         bf_alt_vs_truth = exp(-delta_lml)) %>%
+  select(truth_form, competitor_form, rep, delta_lml,
          bf_truth_vs_alt, bf_alt_vs_truth)
 
-print(lml_errors)
-#-------------------------------------------------------------------------------
-# DIC diagnostics - unclear
-#-------------------------------------------------------------------------------
+write.csv(lml_errors,
+          file.path(model_discrimination_table_dir,
+                    "lml_misclassifications.csv"),
+          row.names = FALSE)
 
-dic_component_summary <- model_scores_full %>%
-  filter(fitted_kernel != truth_kernel) %>%
-  select(truth_kernel, fitted_kernel, rep, mean_deviance, p_eff) %>%
-  rename(competitor_kernel = fitted_kernel,
-         mean_deviance_competitor = mean_deviance,
-         p_eff_competitor = p_eff) %>%
-  inner_join(truth_dic, by = c("truth_kernel", "rep")) %>%
-  mutate(delta_mean_deviance = mean_deviance_competitor - mean_deviance_truth,
-         delta_p_eff = p_eff_competitor - p_eff_truth) %>%
-  group_by(truth_kernel, competitor_kernel) %>%
-  summarise(
-    median_delta_mean_deviance = median(delta_mean_deviance),
-    median_delta_p_eff = median(delta_p_eff),
-    prop_mean_deviance_favours_truth = mean(delta_mean_deviance > 0),
-    prop_p_eff_favours_truth = mean(delta_p_eff > 0),
-    .groups = "drop")
-
-print(dic_component_summary)
+message("Saved model-discrimination tables to: ",
+        model_discrimination_table_dir)
+message("Saved model-discrimination figure to: ",
+        model_discrimination_figure_dir)
+message("Finished model-discrimination analysis.")

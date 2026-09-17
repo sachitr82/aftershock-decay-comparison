@@ -1,0 +1,4 @@
+"prior","n","usable","converged","degenerate","median_iter"
+"mse_centered",5,5,5,0,43
+"uniform_1_200",5,0,0,4,10
+"wide_lognormal",5,0,0,2,100

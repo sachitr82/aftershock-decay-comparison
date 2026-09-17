@@ -1,0 +1,3 @@
+"scenario","fitted_form","lml","runtime_minutes","fit_status","converged","hit_max","inla_failure","nan_inf_logl","vb_aborted","n_iter","min_sd","degenerate","usable"
+"mse_narrow_rho","mse",-12580.5367683372,3.61896990140279,"converged",TRUE,FALSE,FALSE,FALSE,FALSE,60,0.00525996475934476,FALSE,TRUE
+"rs_broad","rate_state",-12671.7752898362,3.25513304869334,"converged",TRUE,FALSE,FALSE,FALSE,FALSE,59,0.00534448377385152,FALSE,TRUE

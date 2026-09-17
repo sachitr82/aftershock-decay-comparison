@@ -2,12 +2,18 @@
 # Fit Ridgecrest catalogue
 #===============================================================================
 
+#-------------------------------------------------------------------------------
+# Load packages and design
+#-------------------------------------------------------------------------------
+
 library(dplyr)
 library(ETAS.inlabru)
 library(here)
 library(inlabru)
 
-source(here("analyses", "simulation", "00_design.R"))
+source(here("analyses", "ridgecrest", "00_design.R"))
+source(here("src", "fit_helpers", "fit_diagnostics.R"))
+source(here("src", "fit_helpers", "fit_temporal_etas.R"))
 
 #-------------------------------------------------------------------------------
 # Load and prepare final Ridgecrest catalogue
@@ -61,73 +67,18 @@ cat("Ridgecrest catalogue:", nrow(cat_rc), "events\n")
 cat("Observation window:", T_fit_start, "to", T_fit_end, "days\n")
 cat("Event-time range:", range(cat_rc$ts), "days\n")
 cat("Magnitude range:", range(cat_rc$magnitudes), "\n")
+
 #-------------------------------------------------------------------------------
 # Fixed fitting design
 #-------------------------------------------------------------------------------
 
-candidate_kernels <- c("ou", "mse", "rate_state")
+candidate_forms <- c("ou", "mse", "rate_state")
 
 stopifnot(temporal_binning$N.max == 14)
 stopifnot(fit_control$rel_tol == 0.1)
 stopifnot(fit_control$max_iter == 100)
 
-ridgecrest_fit_dir <- here("outputs", "ridgecrest", "baseline")
-dir.create(ridgecrest_fit_dir, recursive = TRUE, showWarnings = FALSE)
-
 fit_seeds <- c(ou = 400001, mse = 400002, rate_state = 400003)
-
-#-------------------------------------------------------------------------------
-# Fit diagnostics
-#-------------------------------------------------------------------------------
-
-fit_diagnostics <- function(fit) {
-  log_i <- as.character(inlabru::bru_log(fit))
-  
-  inla_failure <- any(grepl(
-    "Problem in inla|Giving up and returning last successfully obtained result|inla-program exited with an error|maximum number of tries has been reached|Newton-Raphson optimizer did not converge",
-    log_i))
-  
-  nan_inf_logl <- any(grepl("NAN/INF values in logl", log_i, fixed = TRUE))
-  vb_aborted <- any(grepl("max_correction|vb.correction.*aborted", log_i))
-  
-  converged <- !inla_failure &&
-    any(grepl("Convergence criterion met", log_i, fixed = TRUE))
-  
-  hit_max <- !inla_failure &&
-    any(grepl("Maximum iterations reached", log_i, fixed = TRUE))
-  
-  fit_status <- case_when(inla_failure ~ "inla_failure",
-                          converged ~ "converged",
-                          hit_max ~ "hit_max",
-                          TRUE ~ "unknown")
-  
-  n_iter <- max(fit$bru_iinla$track$iteration, na.rm = TRUE)
-  
-  list(fit_status = fit_status,
-       converged = converged,
-       hit_max = hit_max,
-       inla_failure = inla_failure,
-       nan_inf_logl = nan_inf_logl,
-       vb_aborted = vb_aborted,
-       n_iter = n_iter)
-}
-
-#-------------------------------------------------------------------------------
-# Posterior diagnostics
-#-------------------------------------------------------------------------------
-
-posterior_diagnostics <- function(fit) {
-  x <- fit$summary.fixed
-  
-  data.frame(latent_parameter = rownames(x),
-             mean = x$mean,
-             sd = x$sd,
-             q025 = x$`0.025quant`,
-             median = x$`0.5quant`,
-             q975 = x$`0.975quant`,
-             degenerate = !is.finite(x$sd) | x$sd < 1e-6,
-             row.names = NULL)
-}
 
 #-------------------------------------------------------------------------------
 # Log marginal likelihood
@@ -146,13 +97,13 @@ extract_lml <- function(fit) {
 # Fit OU, MSE and rate-state
 #-------------------------------------------------------------------------------
 
-fit_manifest <- vector("list", length(candidate_kernels))
+fit_manifest <- vector("list", length(candidate_forms))
 
-for (k in seq_along(candidate_kernels)) {
+for (k in seq_along(candidate_forms)) {
   
-  fitted_i <- candidate_kernels[k]
+  fitted_i <- candidate_forms[k]
   
-  outfile_i <- file.path(ridgecrest_fit_dir, paste0("fit_", fitted_i, ".rds"))
+  outfile_i <- file.path(baseline_fit_dir, paste0("fit_", fitted_i, ".rds"))
   
   message("============================================================")
   message("Ridgecrest | Fit: ", fitted_i)
@@ -164,37 +115,27 @@ for (k in seq_along(candidate_kernels)) {
     output_i <- readRDS(outfile_i)
   } else {
     
-    set.seed(fit_seeds[[fitted_i]])
+    # fit each candidate form
+    result_i <- fit_temporal_etas(catalogue = cat_rc,
+                                  fitted_form = fitted_i,
+                                  binning = temporal_binning,
+                                  fit_control = fit_control,
+                                  M0 = M0,
+                                  T1 = T_fit_start,
+                                  T2 = T_fit_end,
+                                  compute_model_criteria = TRUE,
+                                  seed = fit_seeds[[fitted_i]])
     
-    link_i <- make_links_P0(fitted_i)
-    
-    bru_i <- make_bru_options_P0(fitted_i, rel_tol = fit_control$rel_tol,
-                                 max_iter = fit_control$max_iter)
-    
-    bru_i$control.compute <- list(config = TRUE, mlik = TRUE)
-    
-    start_i <- Sys.time()
-    
-    fit_i <- ETAS.inlabru::Temporal.ETAS(total.data = cat_rc,
-                                         M0 = M0,
-                                         T1 = T_fit_start,
-                                         T2 = T_fit_end,
-                                         link.functions = link_i,
-                                         coef.t. = temporal_binning$coef.t,
-                                         delta.t. = temporal_binning$delta.t,
-                                         N.max. = temporal_binning$N.max,
-                                         bru.opt = bru_i,
-                                         kernel = fitted_i)
-    
-    runtime_i <- as.numeric(difftime(Sys.time(), start_i, units = "mins"))
-    
-    diag_i <- fit_diagnostics(fit_i)
-    posterior_diag_i <- posterior_diagnostics(fit_i)
+    fit_i <- result_i$fit
+    link_i <- result_i$link.functions
+    runtime_i <- result_i$runtime_minutes
+    diag_i <- result_i$diagnostics
+    usable_i <- result_i$usable
     lml_i <- extract_lml(fit_i)
     
     output_i <- list(fit = fit_i,
                      link.functions = link_i,
-                     fitted_kernel = fitted_i,
+                     fitted_form = fitted_i,
                      M0 = M0,
                      T1 = T_fit_start,
                      T2 = T_fit_end,
@@ -204,16 +145,11 @@ for (k in seq_along(candidate_kernels)) {
                      max_iter = fit_control$max_iter,
                      fit_seed = fit_seeds[[fitted_i]],
                      runtime_minutes = runtime_i,
-                     fit_status = diag_i$fit_status,
-                     converged = diag_i$converged,
-                     hit_max = diag_i$hit_max,
-                     inla_failure = diag_i$inla_failure,
-                     nan_inf_logl = diag_i$nan_inf_logl,
-                     vb_aborted = diag_i$vb_aborted,
-                     n_iter = diag_i$n_iter,
-                     posterior_diagnostics = posterior_diag_i,
+                     diagnostics = diag_i,
+                     usable = usable_i,
                      lml = lml_i)
     
+    # Save atomically via a temporary file to avoid incomplete fit objects
     tmp_i <- tempfile(pattern = "fit_", tmpdir = dirname(outfile_i), 
                       fileext = ".rds")
     
@@ -228,29 +164,23 @@ for (k in seq_along(candidate_kernels)) {
             " | LML = ", round(lml_i, 2))
   }
   
-  posterior_diag_i <- posterior_diagnostics(output_i$fit)
+  diag_i <- output_i$diagnostics
+  usable_i <- output_i$usable
   
-  n_degenerate_i <- sum(posterior_diag_i$degenerate)
-  posterior_valid_i <- n_degenerate_i == 0
-  
-  if (!posterior_valid_i) {
-    warning(fitted_i, " fit contains ", 
-            n_degenerate_i, " near-degenerate latent posterior marginal(s).")
-  }
-  
-  fit_manifest[[k]] <- data.frame(fitted_kernel = fitted_i,
+  fit_manifest[[k]] <- data.frame(fitted_form = fitted_i,
                                   n_fit = output_i$n_fit,
                                   lml = output_i$lml,
                                   runtime_minutes = output_i$runtime_minutes,
-                                  fit_status = output_i$fit_status,
-                                  converged = output_i$converged,
-                                  posterior_valid = posterior_valid_i,
-                                  hit_max = output_i$hit_max,
-                                  inla_failure = output_i$inla_failure,
-                                  nan_inf_logl = output_i$nan_inf_logl,
-                                  vb_aborted = output_i$vb_aborted,
-                                  n_iter = output_i$n_iter,
-                                  n_degenerate = n_degenerate_i,
+                                  fit_status = diag_i$fit_status,
+                                  converged = diag_i$converged,
+                                  hit_max = diag_i$hit_max,
+                                  inla_failure = diag_i$inla_failure,
+                                  nan_inf_logl = diag_i$nan_inf_logl,
+                                  vb_aborted = diag_i$vb_aborted,
+                                  n_iter = diag_i$n_iter,
+                                  min_sd = diag_i$min_sd,
+                                  degenerate = diag_i$degenerate,
+                                  usable = usable_i,
                                   file = basename(outfile_i))
 }
 #-------------------------------------------------------------------------------
@@ -261,9 +191,10 @@ fit_manifest <- bind_rows(fit_manifest)
 
 fit_manifest <- fit_manifest %>% arrange(desc(lml))
 
-print(fit_manifest)
-
-write.csv(fit_manifest, file.path(ridgecrest_fit_dir, "fit_manifest.csv"),
+write.csv(fit_manifest,
+          file.path(baseline_fit_summary_dir, "fit_manifest.csv"),
           row.names = FALSE)
 
+message("Saved baseline fits to: ", baseline_fit_dir)
+message("Saved baseline fit manifest to: ", baseline_fit_summary_dir)
 message("Finished Ridgecrest baseline fits.")

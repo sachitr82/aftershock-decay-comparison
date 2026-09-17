@@ -1,5 +1,5 @@
 #===============================================================================
-# Generate one pilot catalogue from each kernel
+# Generate one pilot catalogue from each temporal decay form
 #===============================================================================
 
 #-------------------------------------------------------------------------------
@@ -7,6 +7,7 @@
 #-------------------------------------------------------------------------------
 
 library(ETAS.inlabru)
+library(future)
 library(here)
 
 source(here("analyses", "simulation", "00_design.R"))
@@ -18,32 +19,37 @@ source(here("analyses", "simulation", "00_design.R"))
 future::plan(future::sequential)
 
 #-------------------------------------------------------------------------------
-# Function to generate one pilot catalogue for a specified temporal kernel
+# Function to generate one pilot catalogue for a specified temporal decay form
 # Uses the fixed truth, seed and observation window defined in 00_design.R
 #-------------------------------------------------------------------------------
 
-simulate_pilot <- function(kernel) {
+simulate_pilot <- function(form) {
   
-  stopifnot(kernel %in% names(truths))
+  stopifnot(form %in% names(truths))
   
-  # Fixed kernel-specific pilot seed
-  seed <- pilot_seeds[[kernel]]
+  # Fixed form-specific pilot seed
+  seed <- pilot_seeds[[form]]
   
   set.seed(seed)
   
-  message("Generating ", kernel," pilot catalogue (seed = ", seed, ")...")
+  message("Generating ", form," pilot catalogue (seed = ", seed, ")...")
   
   #-----------------------------------------------------------------------------
   # Generate complete synthetic catalogue
   #-----------------------------------------------------------------------------
   
-  catalogue <- generate_temporal_ETAS_synthetic(
-                theta = truths[[kernel]], beta.p = beta_true, M0 = M0,
-                T1 = T_fit_start, T2 = T_fit_end, Ht = mainshock_event,
-                format = "df", kernel = kernel, Mmax = Mmax)
+  catalogue <- generate_temporal_ETAS_synthetic(theta = truths[[form]],
+                                                beta.p = beta_true,
+                                                M0 = M0,
+                                                T1 = T_fit_start,
+                                                T2 = T_fit_end,
+                                                Ht = mainshock_event,
+                                                format = "df",
+                                                form = form,
+                                                Mmax = Mmax)
   
   #-----------------------------------------------------------------------------
-  # Check valid catalogues returned
+  # Check valid catalogue returned
   #-----------------------------------------------------------------------------
   
   stopifnot(
@@ -63,22 +69,28 @@ simulate_pilot <- function(kernel) {
   #-----------------------------------------------------------------------------
   
   output <- list(
-    catalogue = catalogue, truth_kernel = kernel, 
-    truth_parameters = truths[[kernel]], seed = seed,
-    design = list(
-      M0 = M0, Mmax = Mmax, b = b_true, beta = beta_true,
-      fit_start_date = fit_start_date, fit_end_date = fit_end_date,
-      T_fit_start = T_fit_start, T_fit_end = T_fit_end, 
-      mainshock = mainshock_event, G_mainshock_obs_target = G_mainshock_obs_target,
-      G_mainshock_obs = G_mainshock_obs[[kernel]], G_inf = G_inf[[kernel]],
-      branching_ratio = branching_ratio[[kernel]], 
-      mainshock_direct_obs = mainshock_direct_obs[[kernel]]))
+    catalogue = catalogue, truth_form = form, 
+    truth_parameters = truths[[form]], seed = seed,
+    design = list(M0 = M0,
+                  Mmax = Mmax,
+                  b = b_true, 
+                  beta = beta_true,
+                  fit_start_date = fit_start_date, 
+                  fit_end_date = fit_end_date, 
+                  T_fit_start = T_fit_start,
+                  T_fit_end = T_fit_end, 
+                  mainshock = mainshock_event,
+                  G_mainshock_obs_target = G_mainshock_obs_target,
+                  G_mainshock_obs = G_mainshock_obs[[form]],
+                  G_inf = G_inf[[form]],
+                  branching_ratio = branching_ratio[[form]], 
+                  mainshock_direct_obs = mainshock_direct_obs[[form]]))
 
   #-----------------------------------------------------------------------------
   # Save
   #-----------------------------------------------------------------------------
   
-  outfile <- file.path(pilot_dir, paste0(kernel, "_pilot.rds"))
+  outfile <- file.path(pilot_catalogue_dir, paste0(form, "_pilot.rds"))
   
   saveRDS(output, outfile)
   
@@ -88,9 +100,9 @@ simulate_pilot <- function(kernel) {
 }
 
 #------------------------------------------------------------------------------
-# Generate one pilot from each true kernel
+# Generate one pilot from each true form
 #------------------------------------------------------------------------------
 
-for (kernel in names(truths)) simulate_pilot(kernel)
+for (form in names(truths)) simulate_pilot(form)
 
 message("Finished generating all three pilot catalogues.")

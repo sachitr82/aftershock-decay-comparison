@@ -1,0 +1,6 @@
+"truth_form","parameter_1","parameter_2","n","median_correlation"
+"mse","d","gamma",100,-0.802378924378925
+"mse","d","rho",100,0.881089211089211
+"mse","gamma","rho",100,-0.959527697527698
+"ou","c","p",100,0.736255564255564
+"rate_state","1-B","ta",100,-0.589029259029259

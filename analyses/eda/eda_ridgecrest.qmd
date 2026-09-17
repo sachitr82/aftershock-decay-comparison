@@ -150,7 +150,7 @@ cat_raw_all %>%
   labs(title = "Events by geographic type", x = "Longitude", y = "Latitude")
 ```
 
-We choose to retain only events of local geographic type (`gt = l`); this choice is physically motivated. The $M7.1$ Ridgecrest produced \~46 km of surface rupture [@barnhart2019ridgecrest] and aftershocks are expected to occur within 1–2 fault lengths of the rupture [@usgs_aftershocks]; consistently, Gardner and Knopoff [@gardner1974sequence] specify an aftershock distance window of \~70 km for an $M7.0$ Southern California earthquake. Because these empirical estimates are derived from observed aftershock sequences, they provide a practical benchmark for the expected spatial extent of the sequence. To test for contamination conservatively, we consider an ellipse aligned with the $\sim 322^{\circ}$ rupture strike [@barnhart2019ridgecrest], with a semi-major axis three times and a semi-minor axis two times the fault length, giving a conservative zone relative to both estimates above. No regional or teleseismic events fall within this conservative zone, validating their removal from analysis.
+We choose to retain only events of local geographic type (`gt = l`); this choice is physically motivated. The $M7.1$ Ridgecrest produced \~46 km of surface rupture [@barnhart2019ridgecrest] and aftershocks are expected to occur within 1–2 fault lengths of the rupture [@usgs_aftershocks]. Because these empirical estimates are derived from observed aftershock sequences, they provide a practical benchmark for the expected spatial extent of the sequence. To test for contamination conservatively, we consider an ellipse aligned with the $\sim 322^{\circ}$ rupture strike [@barnhart2019ridgecrest], with a semi-major axis three times and a semi-minor axis two times the fault length, giving a conservative zone relative to both estimates above. No regional or teleseismic events fall within this conservative zone, validating their removal from analysis.
 
 ```{r map-aftershock}
 # Ellipse parameters
@@ -1124,6 +1124,7 @@ ggsave(file.path(figure_dir, "ridgecrest_completeness.pdf"), p_completeness_repo
 
 ggsave(file.path(figure_dir, "ridgecrest_window.pdf"), p_window_report,
        width = 8.5, height = 4.2)
+
 ```
 
 # Save final Ridgecrest catalogue
@@ -1132,12 +1133,14 @@ ggsave(file.path(figure_dir, "ridgecrest_window.pdf"), p_window_report,
 derived_dir <- here("data", "derived")
 dir.create(derived_dir, recursive = TRUE, showWarnings = FALSE)
 
-saveRDS(cat_temporal, 
-        here("data", "derived", "ridgecrest_temporal_catalogue.rds"))
+rds_file <- here("data", "derived", "ridgecrest_temporal_catalogue.rds")
+csv_file <- here("data", "derived", "ridgecrest_temporal_catalogue.csv")
 
-write.csv(cat_temporal,
-          here("data", "derived", "ridgecrest_temporal_catalogue.csv"),
-          row.names = FALSE)
+saveRDS(cat_temporal, rds_file)
+write.csv(cat_temporal, csv_file, row.names = FALSE)
+
+message("Saved ", rds_file)
+message("Saved ", csv_file)
 ```
 
 # References

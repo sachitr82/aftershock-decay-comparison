@@ -1,3 +1,0 @@
-"scenario","kernel","lml","runtime_minutes","fit_status","converged","hit_max","inla_failure","nan_inf_logl","vb_aborted","n_iter"
-"mse_narrow_rho","mse",-12580.5367682503,3.46178298393885,"converged",TRUE,FALSE,FALSE,FALSE,FALSE,60
-"rs_broad","rate_state",-12671.7752899141,3.22767553329468,"converged",TRUE,FALSE,FALSE,FALSE,FALSE,59

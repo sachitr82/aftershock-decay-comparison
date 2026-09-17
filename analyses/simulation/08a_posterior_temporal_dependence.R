@@ -14,25 +14,18 @@ library(ETAS.inlabru)
 source(here("analyses", "simulation", "00_design.R"))
 
 #-------------------------------------------------------------------------------
-# Directories and manifest
+# Load fit manifest
 #-------------------------------------------------------------------------------
 
-main_fit_dir <- file.path(fit_dir, "main_simulation")
-recovery_dir <- file.path(main_fit_dir, "parameter_recovery")
-
-fit_manifest <- read.csv(file.path(main_fit_dir, "fit_manifest.csv"),
+fit_manifest <- read.csv(file.path(fit_dir, "fit_manifest.csv"),
                          stringsAsFactors = FALSE)
 
-fit_manifest$fit_file <- file.path(main_fit_dir,
-                                   paste0("truth_", fit_manifest$truth_kernel),
+fit_manifest$fit_file <- file.path(fit_dir,
+                                   paste0("truth_", fit_manifest$truth_form),
                                    fit_manifest$file)
 
-fit_manifest <- fit_manifest %>%
-  mutate(usable = converged & !hit_max & !degenerate & !vb_aborted &
-           !inla_failure & !nan_inf_logl)
-
 correct_manifest <- fit_manifest %>%
-  filter(usable, truth_kernel == fitted_kernel)
+  filter(usable, truth_form == fitted_form)
 
 stopifnot(nrow(correct_manifest) == 300)
 
@@ -40,6 +33,7 @@ stopifnot(nrow(correct_manifest) == 300)
 # Posterior parameter dependence
 #-------------------------------------------------------------------------------
 
+# Number of joint posterior draws
 n_corr_samp <- 1000
 
 correlation_pars <- list(
@@ -52,28 +46,33 @@ posterior_corr_rows <- vector("list", nrow(correct_manifest))
 for (i in seq_len(nrow(correct_manifest))) {
   
   row_i <- correct_manifest[i, ]
-  kernel_i <- row_i$truth_kernel
+  form_i <- row_i$truth_form
   
   message(i, "/", nrow(correct_manifest), " | posterior correlation | ",
-          kernel_i, " | rep ", row_i$rep)
+          form_i, " | rep ", row_i$rep)
   
   obj_i <- readRDS(row_i$fit_file)
   
   set.seed(5000000 + i)
   
-  post_i <- ETAS.inlabru::post_sampling(input.list = list(
-    model.fit = obj_i$fit, link.functions = obj_i$link.functions,
-    kernel = kernel_i), n.samp = n_corr_samp, max.batch = n_corr_samp)
+  # n_corr_samp joint posterior draws
+  post_i <- ETAS.inlabru::post_sampling(
+    input.list = list(model.fit = obj_i$fit,
+                      link.functions = obj_i$link.functions,
+                      form = form_i),
+    n.samp = n_corr_samp,
+    max.batch = n_corr_samp)
   
   pars_i <- post_i %>%
-    select(all_of(correlation_pars[[kernel_i]]))
+    select(all_of(correlation_pars[[form_i]]))
   
-  if (kernel_i == "rate_state") {
+  if (form_i == "rate_state") {
     pars_i <- pars_i %>%
       mutate(`1-B` = 1 - B) %>%
       select(mu, K, alpha, `1-B`, ta)
   }
   
+  # Compute within-catalogue Spearman correlations across joint posterior draws
   corr_i <- cor(pars_i, method = "spearman", use = "pairwise.complete.obs")
   
   pair_i <- as.data.frame(as.table(corr_i)) %>%
@@ -82,8 +81,8 @@ for (i in seq_len(nrow(correct_manifest))) {
            parameter_2 = as.character(parameter_2)) %>%
     filter(parameter_1 < parameter_2) %>%
     select(parameter_1, parameter_2, correlation) %>%
-    mutate(truth_kernel = kernel_i, rep = row_i$rep) %>%
-    select(truth_kernel, rep, parameter_1, parameter_2, correlation)
+    mutate(truth_form = form_i, rep = row_i$rep) %>%
+    select(truth_form, rep, parameter_1, parameter_2, correlation)
   
   posterior_corr_rows[[i]] <- pair_i
   
@@ -95,54 +94,42 @@ for (i in seq_len(nrow(correct_manifest))) {
 posterior_parameter_correlations <- bind_rows(posterior_corr_rows)
 
 stopifnot(
-  sum(posterior_parameter_correlations$truth_kernel == "ou") == 1000,
-  sum(posterior_parameter_correlations$truth_kernel == "mse") == 1500,
-  sum(posterior_parameter_correlations$truth_kernel == "rate_state") == 1000)
+  sum(posterior_parameter_correlations$truth_form == "ou") == 1000,
+  sum(posterior_parameter_correlations$truth_form == "mse") == 1500,
+  sum(posterior_parameter_correlations$truth_form == "rate_state") == 1000)
 
 #-------------------------------------------------------------------------------
-# Repeated-catalogue summary
+# Median within-catalogue correlation across the 100 repeated catalogues
 #-------------------------------------------------------------------------------
 
 posterior_corr_summary <- posterior_parameter_correlations %>%
-  group_by(truth_kernel, parameter_1, parameter_2) %>%
-  summarise(
-    n = n(),
-    median_correlation = median(correlation),
-    q10_correlation = quantile(correlation, 0.10),
-    q90_correlation = quantile(correlation, 0.90),
-    median_abs_correlation = median(abs(correlation)),
-    prop_abs_gt_05 = mean(abs(correlation) > 0.5),
-    prop_abs_gt_07 = mean(abs(correlation) > 0.7),
-    .groups = "drop")
-
-print(posterior_corr_summary)
+  group_by(truth_form, parameter_1, parameter_2) %>%
+  summarise(n = n(),
+            median_correlation = median(correlation),
+            .groups = "drop")
 
 #-------------------------------------------------------------------------------
 # Temporal-parameter subset
 #-------------------------------------------------------------------------------
 
-temporal_pars <- list(
-  ou = c("c", "p"),
-  mse = c("d", "rho", "gamma"),
-  rate_state = c("1-B", "ta"))
+temporal_pars <- list(ou = c("c", "p"),
+                      mse = c("d", "rho", "gamma"),
+                      rate_state = c("1-B", "ta"))
 
 posterior_temporal_corr_summary <- posterior_corr_summary %>%
   rowwise() %>%
-  filter(parameter_1 %in% temporal_pars[[truth_kernel]],
-         parameter_2 %in% temporal_pars[[truth_kernel]]) %>%
+  filter(parameter_1 %in% temporal_pars[[truth_form]],
+         parameter_2 %in% temporal_pars[[truth_form]]) %>%
   ungroup()
-
-print(posterior_temporal_corr_summary)
 
 #-------------------------------------------------------------------------------
 # Plot
 #-------------------------------------------------------------------------------
 
 posterior_corr_plot_data <- posterior_parameter_correlations %>%
-  mutate(
-    form = factor(truth_kernel, levels = c("ou", "mse", "rate_state"),
+  mutate(form = factor(truth_form, levels = c("ou", "mse", "rate_state"),
                   labels = c("OU", "MSE", "RS")),
-    pair = paste(parameter_1, parameter_2, sep = " – "))
+         pair = paste(parameter_1, parameter_2, sep = " – "))
 
 p_corr <- ggplot(posterior_corr_plot_data, aes(x = pair, y = correlation)) +
   geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.4) +
@@ -154,26 +141,18 @@ p_corr <- ggplot(posterior_corr_plot_data, aes(x = pair, y = correlation)) +
   theme(panel.grid.minor = element_blank(),
     axis.text.x = element_text(angle = 45, hjust = 1))
 
-print(p_corr)
-
 #-------------------------------------------------------------------------------
 # Save
 #-------------------------------------------------------------------------------
-
-saveRDS(posterior_parameter_correlations,
-        file.path(recovery_dir, "posterior_parameter_correlations.rds"))
-
-write.csv(posterior_parameter_correlations,
-          file.path(recovery_dir, "posterior_parameter_correlations_by_catalogue.csv"),
-          row.names = FALSE)
-
-write.csv(posterior_corr_summary,
-          file.path(recovery_dir, "posterior_parameter_correlations_summary.csv"),
-          row.names = FALSE)
-
 write.csv(posterior_temporal_corr_summary,
-          file.path(recovery_dir, "posterior_temporal_correlations_summary.csv"),
+          file.path(recovery_table_dir,
+                    "posterior_temporal_correlations_summary.csv"),
           row.names = FALSE)
 
-ggsave(file.path(recovery_dir, "posterior_parameter_correlations.pdf"),
+ggsave(file.path(recovery_figure_dir,
+                 "posterior_parameter_correlations.pdf"),
        p_corr, width = 10, height = 4.5)
+
+message("Saved posterior dependence tables to: ", recovery_table_dir)
+message("Saved posterior dependence figure to: ", recovery_figure_dir)
+message("Finished posterior dependence analysis.")

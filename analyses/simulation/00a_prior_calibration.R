@@ -1,5 +1,5 @@
 #===============================================================================
-# Prior calibration / prior-predictive check
+# Prior calibration / induced-prior check
 #===============================================================================
 
 #-------------------------------------------------------------------------------
@@ -86,40 +86,35 @@ draws$rate_state$G_0_T <- calc_mass("rate_state", draws$rate_state)
 #-------------------------------------------------------------------------------
 
 q_summary <- function(x) {
-  
   q <- quantile(x, c(.05, .5, .95), na.rm = TRUE)
-  c(q05 = q[1], median = q[2], q95 = q[3])
+  setNames(as.numeric(q), c("q05", "median", "q95"))
 }
 
 #-------------------------------------------------------------------------------
 # Summarise marginal priors and finite-window temporal mass
 #-------------------------------------------------------------------------------
 
-prior_summary <- rbind(
-  ou_c = q_summary(draws$ou$c),
-  ou_p = q_summary(draws$ou$p),
-  ou_G_0_T = q_summary(draws$ou$G_0_T),
-  
-  mse_d = q_summary(draws$mse$d),
-  mse_rho = q_summary(draws$mse$rho),
-  mse_gamma = q_summary(draws$mse$gamma),
-  mse_G_0_T = q_summary(draws$mse$G_0_T),
-  
-  rs_B = q_summary(draws$rate_state$B),
-  rs_ta = q_summary(draws$rate_state$ta),
-  rs_G_0_T = q_summary(draws$rate_state$G_0_T)
-)
+prior_summary <- rbind(ou_c = q_summary(draws$ou$c),
+                       ou_p = q_summary(draws$ou$p),
+                       ou_G_0_T = q_summary(draws$ou$G_0_T),
+                      
+                       mse_d = q_summary(draws$mse$d),
+                       mse_rho = q_summary(draws$mse$rho),
+                       mse_gamma = q_summary(draws$mse$gamma),
+                       mse_G_0_T = q_summary(draws$mse$G_0_T),
+                      
+                       rs_B = q_summary(draws$rate_state$B),
+                       rs_ta = q_summary(draws$rate_state$ta),
+                       rs_G_0_T = q_summary(draws$rate_state$G_0_T))
 
 prior_summary <- data.frame(quantity = rownames(prior_summary), 
                             prior_summary, row.names = NULL)
-
-print(prior_summary)
 
 #-------------------------------------------------------------------------------
 # Save prior summary table
 #-------------------------------------------------------------------------------
 
-tablefile <- file.path(table_dir, "baseline_prior_summary.csv")
+tablefile <- file.path(prior_calibration_dir, "baseline_prior_summary.csv")
 
 write.csv(prior_summary, tablefile, row.names = FALSE)
 
@@ -186,7 +181,7 @@ plots <- list(
   mse = plot_prior_draws(h_plot$mse, "MSE baseline prior"),
   rate_state = plot_prior_draws(h_plot$rate_state, "Rate-state baseline prior"))
 
-figfile <- file.path(figure_dir, "baseline_prior_normalised_kernel_draws.png")
+figfile <- file.path(prior_calibration_dir, "baseline_prior_normalised_decay_draws.png")
 
 ggsave(filename = figfile, plot = patchwork::wrap_plots(plots, ncol = 1),
        width = 9, height = 9)

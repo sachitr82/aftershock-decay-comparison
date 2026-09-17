@@ -206,8 +206,8 @@ prior_baseline <- list(
              rho = list(dist = "lognormal", meanlog = log(1.5), sdlog = 1),
              gamma = list(dist = "uniform", min = bound_eps, max = 1 - bound_eps)),
   
-  rate_state = list( B = list(dist = "logit_normal", mean = 7.5, sd = 1),
-                     ta = list(dist = "lognormal", meanlog = log(200), sdlog = 0.5))
+  rate_state = list(B = list(dist = "logit_normal", mean = 7.5, sd = 1),
+                    ta = list(dist = "lognormal", meanlog = log(200), sdlog = 0.5))
 )
 
 prior_calibration <- list(n_draws = 10000, T = T_fit_end, seed = 800001)
@@ -368,14 +368,95 @@ sim_index <- rbind(
 
 simulation_outputs_dir <- here("outputs", "simulation")
 
+# Prior calibration
+prior_calibration_dir <- file.path(simulation_outputs_dir, "prior_calibration")
+
+# Pilot study
 pilot_dir <- file.path(simulation_outputs_dir, "pilots")
+pilot_catalogue_dir <- file.path(pilot_dir, "catalogues")
+pilot_validation_dir <- file.path(pilot_dir, "validation")
+
+# Temporal-binning check
+binning_check_dir <- file.path(pilot_dir, "binning_check")
+binning_fit_dir <- file.path(binning_check_dir, "fits")
+binning_analysis_dir <- file.path(binning_check_dir, "analysis")
+binning_figure_dir <- file.path(binning_analysis_dir, "figures")
+binning_table_dir <- file.path(binning_analysis_dir, "tables")
+
+# rel_tol check
+rel_tol_check_dir <- file.path(pilot_dir, "rel_tol_check")
+rel_tol_fit_dir <- file.path(rel_tol_check_dir, "fits")
+rel_tol_analysis_dir <- file.path(rel_tol_check_dir, "analysis")
+rel_tol_figure_dir <- file.path(rel_tol_analysis_dir, "figures")
+rel_tol_table_dir <- file.path(rel_tol_analysis_dir, "tables")
+
+# Final synthetic catalogues and fitted models
 catalogue_dir <- file.path(simulation_outputs_dir, "catalogues")
-figure_dir <- file.path(simulation_outputs_dir, "figures")
-table_dir <- file.path(simulation_outputs_dir, "tables")
 fit_dir <- file.path(simulation_outputs_dir, "fits")
 
-dir.create(pilot_dir, recursive = TRUE, showWarnings = FALSE)
+# Synthetic-design figure from 00b
+design_figure_dir <- file.path(simulation_outputs_dir, "design_figures")
+
+# Main simulation analyses
+analysis_dir <- file.path(simulation_outputs_dir, "analysis")
+
+# Convergence analysis from 07
+convergence_dir <- file.path(analysis_dir, "convergence")
+convergence_figure_dir <- file.path(convergence_dir, "figures")
+convergence_table_dir <- file.path(convergence_dir, "tables")
+
+# Additional fits and analyses exploring convergence
+misspec_diagnostic_dir <- file.path(analysis_dir, "misspecification_diagnostics")
+misspec_diagnostic_fit_dir <- file.path(misspec_diagnostic_dir, "fits")
+misspec_diagnostic_figure_dir <- file.path(misspec_diagnostic_dir, "figures")
+misspec_diagnostic_table_dir <- file.path(misspec_diagnostic_dir, "tables")
+
+# Parameter and functional recovery
+recovery_dir <- file.path(analysis_dir, "parameter_recovery")
+recovery_figure_dir <- file.path(recovery_dir, "figures")
+recovery_table_dir <- file.path(recovery_dir, "tables")
+
+# Mimicry under misspecification
+misspecification_dir <- file.path(analysis_dir, "misspecification")
+misspecification_figure_dir <- file.path(misspecification_dir, "figures")
+misspecification_table_dir <- file.path(misspecification_dir, "tables")
+
+# Model selection 
+model_discrimination_dir <- file.path(analysis_dir, "model_discrimination")
+model_discrimination_figure_dir <- file.path(model_discrimination_dir, "figures")
+model_discrimination_table_dir <- file.path(model_discrimination_dir, "tables")
+
+# Create required leaf directories
+dir.create(prior_calibration_dir, recursive = TRUE, showWarnings = FALSE)
+
+dir.create(pilot_catalogue_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(pilot_validation_dir, recursive = TRUE, showWarnings = FALSE)
+
+dir.create(binning_fit_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(binning_figure_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(binning_table_dir, recursive = TRUE, showWarnings = FALSE)
+
+dir.create(rel_tol_fit_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(rel_tol_figure_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(rel_tol_table_dir, recursive = TRUE, showWarnings = FALSE)
+
 dir.create(catalogue_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(table_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(fit_dir, recursive = TRUE, showWarnings = FALSE)
+
+dir.create(design_figure_dir, recursive = TRUE, showWarnings = FALSE)
+
+dir.create(convergence_figure_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(convergence_table_dir, recursive = TRUE, showWarnings = FALSE)
+
+dir.create(misspec_diagnostic_fit_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(misspec_diagnostic_figure_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(misspec_diagnostic_table_dir, recursive = TRUE, showWarnings = FALSE)
+
+dir.create(recovery_figure_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(recovery_table_dir, recursive = TRUE, showWarnings = FALSE)
+
+dir.create(misspecification_figure_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(misspecification_table_dir, recursive = TRUE, showWarnings = FALSE)
+
+dir.create(model_discrimination_figure_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(model_discrimination_table_dir, recursive = TRUE, showWarnings = FALSE)

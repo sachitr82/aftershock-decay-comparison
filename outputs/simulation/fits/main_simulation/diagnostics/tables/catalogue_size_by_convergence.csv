@@ -1,6 +1,0 @@
-"fitted_kernel","convergence_class","n_fits","median_n_fit","q25_n_fit","q75_n_fit"
-"ou","Converged",300,2532.5,2002.75,3475.25
-"mse","Converged",273,2496,1995,3309
-"mse","Did not converge",27,3384,2340.5,4226
-"rate_state","Converged",200,2549,2009.5,3518.25
-"rate_state","Did not converge",100,2476,1989.25,3302.25

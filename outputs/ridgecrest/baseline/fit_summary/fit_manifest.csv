@@ -1,0 +1,4 @@
+"fitted_form","n_fit","lml","runtime_minutes","fit_status","converged","hit_max","inla_failure","nan_inf_logl","vb_aborted","n_iter","min_sd","degenerate","usable","file"
+"ou",3339,-12576.6619650336,3.22190720240275,"converged",TRUE,FALSE,FALSE,FALSE,FALSE,59,0.00525771334961978,FALSE,TRUE,"fit_ou.rds"
+"mse",3339,-12580.1751203446,3.57358431816101,"converged",TRUE,FALSE,FALSE,FALSE,FALSE,54,0.00525994538878036,FALSE,TRUE,"fit_mse.rds"
+"rate_state",3339,-12673.2734099659,3.70853816668193,"converged",TRUE,FALSE,FALSE,FALSE,FALSE,58,0.00533117290050537,FALSE,TRUE,"fit_rate_state.rds"

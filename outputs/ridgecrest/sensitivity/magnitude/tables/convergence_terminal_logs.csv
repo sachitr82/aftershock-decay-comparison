@@ -1,0 +1,56 @@
+"M0","form","message"
+3,"mse","iinla: Max deviation from previous: 26.7% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3,"mse","iinla: Max deviation from previous: 25.8% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3,"mse","iinla: Max deviation from previous: 26.7% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3,"mse","iinla: Max deviation from previous: 25.8% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3,"mse","iinla: Max deviation from previous: 26.7% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3,"mse","iinla: Maximum iterations reached, running final INLA integration."
+3,"rate_state","iinla: Max deviation from previous: 467% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3,"rate_state","iinla: Max deviation from previous: 386% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3,"rate_state","iinla: Max deviation from previous: 467% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3,"rate_state","iinla: Max deviation from previous: 386% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3,"rate_state","iinla: Max deviation from previous: 467% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3,"rate_state","iinla: Maximum iterations reached, running final INLA integration."
+3.3,"ou","iinla: Max deviation from previous: 277% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"ou","iinla: Max deviation from previous: 263% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"ou","iinla: Max deviation from previous: 277% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"ou","iinla: Max deviation from previous: 263% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"ou","iinla: Max deviation from previous: 277% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"ou","iinla: Maximum iterations reached, running final INLA integration."
+3.3,"mse","iinla: Max deviation from previous: 65.3% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"mse","iinla: Max deviation from previous: 62.1% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"mse","iinla: Max deviation from previous: 65.3% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"mse","iinla: Max deviation from previous: 62.1% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"mse","iinla: Max deviation from previous: 65.3% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"mse","iinla: Maximum iterations reached, running final INLA integration."
+3.3,"rate_state","iinla: Max deviation from previous: 770% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"rate_state","iinla: Max deviation from previous: 1080% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"rate_state","iinla: Max deviation from previous: 770% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"rate_state","iinla: Max deviation from previous: 1080% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"rate_state","iinla: Max deviation from previous: 770% of SD, and line search is active
+[stop if: < 10% and line search inactive]"
+3.3,"rate_state","iinla: Maximum iterations reached, running final INLA integration."

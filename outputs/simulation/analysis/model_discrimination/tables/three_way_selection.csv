@@ -1,0 +1,6 @@
+"criterion","truth_form","selected_form","n_selected","n_eligible","proportion"
+"dic","ou","rate_state",97,97,1
+"dic","rate_state","rate_state",84,84,1
+"lml","ou","mse",1,97,0.0103092783505155
+"lml","ou","ou",96,97,0.989690721649485
+"lml","rate_state","rate_state",84,84,1

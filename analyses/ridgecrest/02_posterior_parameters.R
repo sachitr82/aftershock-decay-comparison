@@ -2,31 +2,22 @@
 # Ridgecrest posterior parameter summaries
 #===============================================================================
 
+#-------------------------------------------------------------------------------
+# Load packages and design
+#-------------------------------------------------------------------------------
+
 library(dplyr)
 library(ggplot2)
 library(here)
 library(ETAS.inlabru)
 
-#-------------------------------------------------------------------------------
-# Paths
-#-------------------------------------------------------------------------------
+source(here("analyses", "ridgecrest", "00_design.R"))
 
-candidate_kernels <- c("ou", "mse", "rate_state")
-
-ridgecrest_fit_dir <- here("outputs", "ridgecrest", "baseline")
-
-ridgecrest_summary_dir <- here(ridgecrest_fit_dir, "summaries")
-
-ridgecrest_figure_dir <- here(ridgecrest_fit_dir, "figures")
-
-dir.create(ridgecrest_summary_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(ridgecrest_figure_dir, recursive = TRUE, showWarnings = FALSE)
+candidate_forms <- c("ou", "mse", "rate_state")
 
 #-------------------------------------------------------------------------------
 # Plot labels
 #-------------------------------------------------------------------------------
-
-kernel_labels <- c(ou = "OU", mse = "MSE", rate_state = "RS")
 
 parameter_labels <- c(mu = "mu", K = "K", alpha = "alpha", c = "c",
                       p = "p", d = "d", rho = "rho", gamma = "gamma", 
@@ -37,38 +28,38 @@ parameter_labels <- c(mu = "mu", K = "K", alpha = "alpha", c = "c",
 #-------------------------------------------------------------------------------
 
 fit_objects <- setNames(
-  lapply(candidate_kernels, function(k) {
-    readRDS(file.path(ridgecrest_fit_dir, paste0("fit_", k, ".rds")))
+  lapply(candidate_forms, function(k) {
+    readRDS(file.path(baseline_fit_dir, paste0("fit_", k, ".rds")))
   }),
-  candidate_kernels)
+  candidate_forms)
 
 #-------------------------------------------------------------------------------
 # Extract marginal posterior distributions and summaries
 #-------------------------------------------------------------------------------
 
-posterior_rows <- vector("list", length(candidate_kernels))
-marginal_rows <- vector("list", length(candidate_kernels))
+posterior_rows <- vector("list", length(candidate_forms))
+marginal_rows <- vector("list", length(candidate_forms))
 
-for (i in seq_along(candidate_kernels)) {
+for (i in seq_along(candidate_forms)) {
   
-  kernel_i <- candidate_kernels[i]
-  obj_i <- fit_objects[[kernel_i]]
+  form_i <- candidate_forms[i]
+  obj_i <- fit_objects[[form_i]]
   
-  message("Posterior marginals | ", kernel_i)
+  message("Posterior marginals | ", form_i)
   
   post_out_i <- ETAS.inlabru::get_posterior_param(
     list(model.fit = obj_i$fit, link.functions = obj_i$link.functions,
-         kernel = kernel_i))
+         form = form_i))
   
   # Numerical summaries
   post_i <- post_out_i$post.summary %>%
     rename(parameter = param, q025 = q0.025, q975 = q0.975) %>%
-    mutate(model = kernel_i)
+    mutate(model = form_i)
   
   # Marginal density curves
   marg_i <- post_out_i$post.df %>%
     rename(parameter = param) %>%
-    mutate(model = kernel_i)
+    mutate(model = form_i)
   
   posterior_rows[[i]] <- post_i %>%
     select(model, parameter, mean, q025, median, q975)
@@ -110,30 +101,24 @@ posterior_marginals <- posterior_marginals %>%
 
 posterior_summary <- posterior_summary %>%
   mutate(model = factor(model, 
-                        levels = candidate_kernels, 
+                        levels = candidate_forms, 
                         labels = c("OU", "MSE", "RS")))
 
 posterior_marginals <- posterior_marginals %>%
   mutate(model = factor(model,
-                        levels = candidate_kernels,
+                        levels = candidate_forms,
                         labels = c("OU", "MSE", "RS")))
 
 #-------------------------------------------------------------------------------
 # Numerical posterior summaries
 #-------------------------------------------------------------------------------
 
-print(as_tibble(posterior_summary), n = Inf)
+write.csv(posterior_summary,
+          file.path(parameter_table_dir,
+                    "baseline_posterior_parameter_summary.csv"),
+          row.names = FALSE)
 
-write.csv(posterior_summary, file.path(ridgecrest_summary_dir,
-                                       "baseline_posterior_parameter_summary.csv"),
-  row.names = FALSE)
-
-shared_summary <- posterior_summary %>%
-  filter(parameter %in% c("mu", "K", "alpha"))
-
-print(shared_summary)
-
-##-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 # Shared ETAS parameters
 #-------------------------------------------------------------------------------
 
@@ -150,9 +135,7 @@ p_shared <- shared_marginals %>%
   theme_bw(base_size = 14) +
   theme(panel.grid.minor = element_blank(), legend.position = "bottom")
 
-print(p_shared)
-
-ggsave(file.path(ridgecrest_figure_dir,
+ggsave(file.path(parameter_figure_dir,
                  "posterior_shared_parameters.pdf"),
        p_shared, width = 9, height = 3.5)
 
@@ -173,8 +156,10 @@ p_temporal <- temporal_marginals %>%
   theme_bw(base_size = 14) +
   theme(panel.grid.minor = element_blank())
 
-print(p_temporal)
-
-ggsave(file.path(ridgecrest_figure_dir,
+ggsave(file.path(parameter_figure_dir,
                  "posterior_temporal_parameters.pdf"),
        p_temporal, width = 10, height = 5.5)
+
+message("Saved posterior parameter summary to: ", parameter_table_dir)
+message("Saved posterior parameter figures to: ", parameter_figure_dir)
+message("Finished Ridgecrest posterior parameter summaries.")

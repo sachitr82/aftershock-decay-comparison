@@ -1,0 +1,10 @@
+"truth_form","fitted_form","n_total","n_converged","convergence_rate","n_usable","usable_rate","n_hit_max"
+"ou","ou",100,100,1,100,1,0
+"ou","mse",100,97,0.97,97,0.97,3
+"ou","rate_state",100,100,1,100,1,0
+"mse","ou",100,100,1,100,1,0
+"mse","mse",100,100,1,100,1,0
+"mse","rate_state",100,0,0,0,0,97
+"rate_state","ou",100,100,1,100,1,0
+"rate_state","mse",100,84,0.84,84,0.84,16
+"rate_state","rate_state",100,100,1,100,1,0
