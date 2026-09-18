@@ -235,6 +235,8 @@ otherwise stated.
     \normalsize%
 }
 
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %     References/Bibliography
@@ -247,3 +249,8 @@ otherwise stated.
 \renewcommand{\bibsection}{\section*{References}}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\renewcommand*{\figureformat}{\figurename~\thefigure}
+\renewcommand*{\tableformat}{\tablename~\thetable}
+\renewcommand*{\captionformat}{:\ }
